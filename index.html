@@ -1,0 +1,1167 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Гроссбух — учёт доходов и расходов</title>
+<script>
+  (function(){
+    try{
+      var t = localStorage.getItem('grossbuh-theme');
+      if (t === 'dark') document.documentElement.setAttribute('data-theme','dark');
+    }catch(e){}
+  })();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#F3EFE4;
+    --panel:#EAE3D0;
+    --panel-alt:#E2DAC3;
+    --text:#22302A;
+    --text-dim:#4B5A52;
+    --muted:#74847B;
+    --income:#8A6A1E;
+    --income-dim:#B79A57;
+    --expense:#96341F;
+    --expense-dim:#C48470;
+    --savings:#3F6B5C;
+    --line:#DBD2BA;
+    --line-soft:#E6DFC9;
+    --focus:#22302A;
+    --radius:2px;
+  }
+  html[data-theme="dark"]{
+    --bg:#0E211C;
+    --panel:#152E27;
+    --panel-alt:#1B3A31;
+    --text:#E9E4D3;
+    --text-dim:#C9C2AC;
+    --muted:#8FA69B;
+    --income:#C9A24B;
+    --income-dim:#8A7238;
+    --expense:#C1573B;
+    --expense-dim:#8A4030;
+    --savings:#7A9E8E;
+    --line:#2A4A40;
+    --line-soft:#203c34;
+    --focus:#E9E4D3;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:'IBM Plex Sans',sans-serif;
+    font-size:15px;
+    line-height:1.5;
+    min-height:100vh;
+    transition:background .15s ease, color .15s ease;
+  }
+  h1,h2,.display{
+    font-family:'Fraunces',serif;
+    font-weight:500;
+    letter-spacing:-0.01em;
+  }
+  .mono{
+    font-family:'IBM Plex Mono',monospace;
+    font-variant-numeric:tabular-nums;
+  }
+  a{color:var(--income);}
+  button, select, input{
+    font-family:inherit;
+    color:inherit;
+  }
+  :focus-visible{
+    outline:2px solid var(--focus);
+    outline-offset:2px;
+  }
+
+  /* ---------- header ---------- */
+  header.top{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    gap:24px;
+    padding:28px 36px;
+    border-bottom:1px solid var(--line);
+    flex-wrap:wrap;
+  }
+  header.top h1{
+    font-size:28px;
+    margin:0;
+    color:var(--text);
+  }
+  header.top .subtitle{
+    color:var(--muted);
+    font-size:13px;
+    margin-top:4px;
+  }
+  .header-controls{
+    display:flex;
+    align-items:center;
+    gap:22px;
+    flex-wrap:wrap;
+  }
+  .theme-toggle{
+    display:flex;
+    align-items:center;
+    gap:7px;
+    font-size:12.5px;
+    color:var(--muted);
+    cursor:pointer;
+    user-select:none;
+  }
+  .theme-toggle input{accent-color:var(--income);}
+  .balance-block{
+    text-align:right;
+  }
+  .balance-label{
+    color:var(--muted);
+    font-size:12px;
+    text-transform:none;
+  }
+  .balance-figure{
+    font-size:34px;
+    font-weight:500;
+    opacity:0;
+    transform:translateY(6px);
+    animation:reveal .6s ease-out .1s forwards;
+  }
+  @media (prefers-reduced-motion:reduce){
+    .balance-figure{animation:none;opacity:1;transform:none;}
+  }
+  @keyframes reveal{
+    to{opacity:1;transform:translateY(0);}
+  }
+  .balance-figure.pos{color:var(--income);}
+  .balance-figure.neg{color:var(--expense);}
+
+  /* ---------- layout ---------- */
+  .layout{
+    display:grid;
+    grid-template-columns:250px 1fr;
+    gap:0;
+    align-items:start;
+  }
+  aside.filters{
+    border-right:1px solid var(--line);
+    padding:24px;
+    position:sticky;
+    top:0;
+    align-self:start;
+    max-height:100vh;
+    overflow-y:auto;
+  }
+  main.dashboard{
+    padding:24px 36px 60px;
+    min-width:0;
+  }
+  @media (max-width:860px){
+    .layout{grid-template-columns:1fr;}
+    aside.filters{
+      border-right:none;
+      border-bottom:1px solid var(--line);
+      position:static;
+      max-height:none;
+    }
+    header.top{padding:20px;}
+    main.dashboard{padding:20px;}
+  }
+
+  /* ---------- filter groups ---------- */
+  .filter-group{margin-bottom:26px;}
+  .filter-group h2{
+    font-size:13px;
+    font-family:'IBM Plex Sans',sans-serif;
+    font-weight:600;
+    color:var(--muted);
+    margin:0 0 10px;
+  }
+  .preset-row{
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px;
+    margin-bottom:10px;
+  }
+  .chip{
+    background:transparent;
+    border:1px solid var(--line);
+    color:var(--text-dim);
+    padding:5px 10px;
+    border-radius:var(--radius);
+    font-size:12.5px;
+    cursor:pointer;
+  }
+  .chip:hover{border-color:var(--muted);color:var(--text);}
+  .chip.active{
+    background:var(--panel-alt);
+    border-color:var(--income-dim);
+    color:var(--income);
+  }
+  .date-group{display:flex;flex-direction:column;gap:10px;}
+  .date-col{display:flex;flex-direction:column;gap:4px;}
+  .date-label{font-size:11px;color:var(--muted);}
+  .date-col input[type=date]{
+    background:var(--panel);
+    border:1px solid var(--line);
+    color:var(--text);
+    padding:6px 8px;
+    border-radius:var(--radius);
+    width:100%;
+    font-size:12.5px;
+  }
+  .type-toggle{display:flex;flex-direction:column;gap:6px;}
+  .type-toggle label{
+    display:flex;align-items:center;gap:8px;
+    font-size:13px;color:var(--text-dim);
+    cursor:pointer;
+  }
+  .cat-search{
+    width:100%;
+    background:var(--panel);
+    border:1px solid var(--line);
+    color:var(--text);
+    padding:6px 8px;
+    border-radius:var(--radius);
+    font-size:12.5px;
+    margin-bottom:8px;
+  }
+  .cat-actions{display:flex;gap:10px;margin-bottom:8px;}
+  .cat-actions button{
+    background:none;border:none;color:var(--muted);
+    font-size:11.5px;cursor:pointer;text-decoration:underline;
+    padding:0;
+  }
+  .cat-actions button:hover{color:var(--text);}
+  .cat-list{
+    max-height:260px;
+    overflow-y:auto;
+    display:flex;flex-direction:column;gap:5px;
+    padding-right:4px;
+  }
+  .cat-list label{
+    display:flex;align-items:center;gap:8px;
+    font-size:12.5px;color:var(--text-dim);
+    cursor:pointer;
+  }
+  .cat-list input,.type-toggle input{accent-color:var(--income);}
+  .free-search{
+    width:100%;
+    background:var(--panel);
+    border:1px solid var(--line);
+    color:var(--text);
+    padding:7px 9px;
+    border-radius:var(--radius);
+    font-size:13px;
+  }
+
+  /* ---------- summary cards ---------- */
+  .summary-row{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:1px;
+    background:var(--line);
+    border:1px solid var(--line);
+    margin-bottom:28px;
+  }
+  .stat{
+    background:var(--bg);
+    padding:18px 20px;
+  }
+  .stat .label{font-size:12px;color:var(--muted);}
+  .stat .value{font-size:24px;margin-top:6px;}
+  .stat.income .value{color:var(--income);}
+  .stat.expense .value{color:var(--expense);}
+  @media (max-width:600px){
+    .summary-row{grid-template-columns:1fr;}
+  }
+
+  /* ---------- sections ---------- */
+  section.block{
+    border-top:1px solid var(--line);
+    padding-top:20px;
+    margin-bottom:32px;
+  }
+  section.block h2{
+    font-size:16px;
+    margin:0 0 14px;
+    color:var(--text);
+    display:flex;
+    align-items:center;
+    gap:10px;
+  }
+  section.block h2.collapsible{cursor:pointer;user-select:none;}
+  section.block h2.collapsible:hover{color:var(--income);}
+  section.block h2 .count{font-size:13px;color:var(--muted);font-family:'IBM Plex Mono',monospace;}
+  section.block h2 .caret{font-size:12px;color:var(--muted);margin-left:auto;}
+  .chart-header-row{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:10px;
+    margin-bottom:14px;
+  }
+  .chart-header-row h2{margin:0;}
+  .chart-scroll{
+    overflow-x:auto;
+    padding-bottom:6px;
+  }
+  .chart-scroll canvas{
+    min-width:520px;
+  }
+  .charts-two{
+    display:grid;
+    grid-template-columns:1.4fr 1fr;
+    gap:32px;
+  }
+  @media (max-width:860px){
+    .charts-two{grid-template-columns:1fr;}
+  }
+  .donut-wrap{max-width:320px;margin:0 auto;}
+
+  /* ---------- month-compare controls ---------- */
+  .compare-controls{
+    display:grid;
+    grid-template-columns:220px 1fr;
+    gap:24px;
+    margin-bottom:18px;
+  }
+  @media (max-width:700px){
+    .compare-controls{grid-template-columns:1fr;}
+  }
+  .month-list{
+    max-height:200px;
+    overflow-y:auto;
+    display:flex;flex-direction:column;gap:5px;
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:10px;
+  }
+  .month-list label{
+    display:flex;align-items:center;gap:8px;
+    font-size:12.5px;color:var(--text-dim);
+    cursor:pointer;
+  }
+  .month-list input{accent-color:var(--income);}
+  .compare-side{display:flex;flex-direction:column;justify-content:space-between;}
+  .compare-hint{font-size:12px;color:var(--muted);margin-top:6px;}
+
+  /* ---------- table ---------- */
+  table.tx{
+    width:100%;
+    border-collapse:collapse;
+    font-size:13.5px;
+  }
+  table.tx th{
+    text-align:left;
+    font-weight:600;
+    font-size:11.5px;
+    color:var(--muted);
+    border-bottom:1px solid var(--line);
+    padding:8px 10px;
+    cursor:pointer;
+    user-select:none;
+    white-space:nowrap;
+  }
+  table.tx th:hover{color:var(--text);}
+  table.tx td{
+    padding:8px 10px;
+    border-bottom:1px solid var(--line-soft);
+    vertical-align:top;
+  }
+  table.tx td.amt{text-align:right;}
+  table.tx td.type-income{color:var(--income);}
+  table.tx td.type-expense{color:var(--expense);}
+  table.tx tbody tr:hover{background:var(--panel);}
+  table.tx tbody tr.hl{background:var(--panel-alt);}
+  .table-foot{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-top:14px;
+    font-size:12.5px;
+    color:var(--muted);
+  }
+  .pager button{
+    background:none;
+    border:1px solid var(--line);
+    color:var(--text-dim);
+    padding:5px 10px;
+    border-radius:var(--radius);
+    cursor:pointer;
+    margin-left:6px;
+  }
+  .pager button:disabled{opacity:.35;cursor:default;}
+  .pager button:not(:disabled):hover{border-color:var(--muted);color:var(--text);}
+
+  /* ---------- states ---------- */
+  .state-box{
+    padding:60px 20px;
+    text-align:center;
+    color:var(--muted);
+    font-size:14px;
+  }
+  .state-box.error{color:var(--expense);}
+  .state-box code{
+    display:block;
+    margin-top:10px;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12px;
+    color:var(--text-dim);
+    white-space:pre-wrap;
+    text-align:left;
+    background:var(--panel);
+    border:1px solid var(--line);
+    padding:12px;
+    border-radius:var(--radius);
+  }
+  footer.foot{
+    padding:20px 36px 40px;
+    border-top:1px solid var(--line);
+    color:var(--muted);
+    font-size:12px;
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div>
+    <h1>Гроссбух</h1>
+    <div class="subtitle" id="periodLabel">учёт доходов и расходов</div>
+  </div>
+  <div class="header-controls">
+    <label class="theme-toggle">
+      <input type="checkbox" id="themeToggle">
+      <span>Тёмная тема</span>
+    </label>
+  </div>
+</header>
+
+<div class="layout">
+  <aside class="filters">
+    <div class="filter-group">
+      <h2>Период (таблица и категории)</h2>
+      <div class="preset-row" id="presetRow">
+        <button class="chip" data-preset="month">Этот месяц</button>
+        <button class="chip" data-preset="3m">3 месяца</button>
+        <button class="chip" data-preset="year">Этот год</button>
+        <button class="chip active" data-preset="all">Всё время</button>
+      </div>
+      <div class="date-group">
+        <div class="date-col">
+          <label class="date-label" for="dateFrom">с</label>
+          <input type="date" id="dateFrom">
+        </div>
+        <div class="date-col">
+          <label class="date-label" for="dateTo">по</label>
+          <input type="date" id="dateTo">
+        </div>
+      </div>
+    </div>
+
+    <div class="filter-group">
+      <h2>Тип операции</h2>
+      <div class="type-toggle">
+        <label><input type="radio" name="type" value="all" checked> Всё</label>
+        <label><input type="radio" name="type" value="income"> Только доходы</label>
+        <label><input type="radio" name="type" value="expense"> Только расходы</label>
+        <label><input type="radio" name="type" value="savings"> Сбережения</label>
+      </div>
+    </div>
+
+    <div class="filter-group">
+      <h2>Категории</h2>
+      <input class="cat-search" id="catSearch" placeholder="поиск категории…">
+      <div class="cat-actions">
+        <button id="catAll">выбрать все</button>
+        <button id="catNone">снять все</button>
+      </div>
+      <div class="cat-list" id="catList"></div>
+      <div class="compare-hint">Категории здесь влияют также на графики «Динамика» и «Сравнение по месяцам» ниже.</div>
+    </div>
+
+    <div class="filter-group">
+      <h2>Поиск по заметке</h2>
+      <input class="free-search" id="freeSearch" placeholder="например: Рено">
+    </div>
+  </aside>
+
+  <main class="dashboard">
+    <div id="loadingState" class="state-box">Загружаю таблицу…</div>
+    <div id="content" style="display:none;">
+
+      <div class="summary-row">
+        <div class="stat income">
+          <div class="label">Доходы</div>
+          <div class="value mono" id="sumIncome">—</div>
+        </div>
+        <div class="stat expense">
+          <div class="label">Расходы</div>
+          <div class="value mono" id="sumExpense">—</div>
+        </div>
+        <div class="stat">
+          <div class="label">Операций</div>
+          <div class="value mono" id="sumCount">—</div>
+        </div>
+      </div>
+
+      <section class="block">
+        <div class="charts-two">
+          <div>
+            <h2>Категории расходов</h2>
+            <div class="donut-wrap">
+              <canvas id="categoryChart"></canvas>
+            </div>
+          </div>
+          <div>
+            <h2>Топ категорий</h2>
+            <table class="tx" id="topCatTable">
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="block">
+        <div class="chart-header-row">
+          <h2>Динамика финансов</h2>
+          <div class="preset-row" id="yearRow"></div>
+        </div>
+        <div class="chart-scroll">
+          <canvas id="yearlyChart" height="90"></canvas>
+        </div>
+      </section>
+
+      <section class="block">
+        <h2>Сравнение категорий расходов по месяцам</h2>
+        <div class="compare-controls">
+          <div>
+            <div class="month-list" id="monthList"></div>
+          </div>
+          <div class="compare-side">
+            <div class="preset-row" id="topTenRow">
+              <button class="chip" data-mode="all">Все категории</button>
+              <button class="chip active" data-mode="top10">Только ТОП-10</button>
+            </div>
+            <div class="compare-hint">Отметьте месяцы слева — каждый станет отдельным столбцом своего цвета на графике.</div>
+          </div>
+        </div>
+        <div class="chart-scroll">
+          <canvas id="compareChart" height="90"></canvas>
+        </div>
+      </section>
+
+      <section class="block">
+        <h2 class="collapsible" id="txHeader">Операции <span class="count mono" id="txHeaderCount"></span><span class="caret" id="txCaret">▸</span></h2>
+        <div id="txBodyWrap" style="display:none;">
+          <table class="tx">
+            <thead>
+              <tr>
+                <th data-sort="date">Дата</th>
+                <th data-sort="category">Категория</th>
+                <th data-sort="note">Заметка</th>
+                <th data-sort="amount" style="text-align:right">Сумма</th>
+              </tr>
+            </thead>
+            <tbody id="txBody"></tbody>
+          </table>
+          <div class="table-foot">
+            <span id="pageInfo"></span>
+            <span class="pager">
+              <button id="prevPage">← назад</button>
+              <button id="nextPage">вперёд →</button>
+            </span>
+          </div>
+        </div>
+      </section>
+
+    </div>
+    <div id="errorState" class="state-box error" style="display:none;"></div>
+  </main>
+</div>
+
+<footer class="foot">
+  Источник данных — <a id="sheetLink" href="#" target="_blank" rel="noopener">Google Таблица</a>. Обновляется при каждой загрузке страницы.
+</footer>
+
+<script>
+/* =========================================================
+   НАСТРОЙКИ
+   ========================================================= */
+const CONFIG = {
+  spreadsheetId: '19jD-hGEjhxHs0lmiSOOG9vrjsAJR4Hc9HFIU6GxhhhI',
+  range: "'БД_Общая'!A:E",
+  apiKey: 'AIzaSyDC4ohUq6bC6SkhfrfpUnTdErihIksJtl8',
+  currency: '',
+  savingsCategories: ['сбережения', 'инвестиции']
+};
+/* ========================================================= */
+
+document.getElementById('sheetLink').href =
+  `https://docs.google.com/spreadsheets/d/${CONFIG.spreadsheetId}/edit`;
+
+/* ---------- тема ---------- */
+const themeToggle = document.getElementById('themeToggle');
+(function initTheme(){
+  let saved = 'light';
+  try{ saved = localStorage.getItem('grossbuh-theme') || 'light'; }catch(e){}
+  document.documentElement.setAttribute('data-theme', saved === 'dark' ? 'dark' : 'light');
+  themeToggle.checked = saved === 'dark';
+})();
+themeToggle.addEventListener('change', () => {
+  const theme = themeToggle.checked ? 'dark' : 'light';
+  document.documentElement.setAttribute('data-theme', theme);
+  try{ localStorage.setItem('grossbuh-theme', theme); }catch(e){}
+  if (ROWS.length) applyFilters();
+});
+function isDark(){ return document.documentElement.getAttribute('data-theme') === 'dark'; }
+function chartColors(){
+  return isDark()
+    ? { grid:'#203c34', tick:'#8FA69B', legend:'#C9C2AC', income:'#C9A24B', expense:'#C1573B', savings:'#7A9E8E', donutBorder:'#0E211C', centerMuted:'#8FA69B', centerText:'#E9E4D3' }
+    : { grid:'#DBD2BA', tick:'#74847B', legend:'#4B5A52', income:'#A67C1E', expense:'#A6432D', savings:'#3F6B5C', donutBorder:'#F3EFE4', centerMuted:'#74847B', centerText:'#22302A' };
+}
+const MONTH_COMPARE_PALETTE = ['#C1573B','#C9A24B','#7A9E8E','#8A5A44','#5E7C6E','#B08968'];
+
+let ROWS = [];
+let CATEGORIES = [];
+let catDisplayMap = new Map();
+let activeCategories = new Set();
+let sortState = { key: 'date', dir: 'desc' };
+let page = 0;
+const PAGE_SIZE = 25;
+let categoryChart, yearlyChart, compareChart;
+let selectedYear = null;
+let selectedMonths = new Set();
+let topTenMode = true;
+
+const fmt = new Intl.NumberFormat('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmt0 = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 });
+function money(n){ return fmt.format(n) + (CONFIG.currency ? ' ' + CONFIG.currency : ''); }
+function money0(n){ return fmt0.format(Math.round(n)) + (CONFIG.currency ? ' ' + CONFIG.currency : ''); }
+
+function parseAmount(raw){
+  if (raw == null) return NaN;
+  const cleaned = String(raw).replace(/\s/g,'').replace(/\u00A0/g,'').replace(',', '.');
+  return parseFloat(cleaned);
+}
+function parseDate(raw){
+  if (!raw) return null;
+  const parts = String(raw).trim().split('.');
+  if (parts.length !== 3) return null;
+  const [d, m, y] = parts.map(Number);
+  if (!d || !m || !y) return null;
+  return new Date(y, m - 1, d);
+}
+function isIncomeType(raw){
+  return String(raw || '').trim().toLowerCase().startsWith('д');
+}
+function isSavingsCategory(key){
+  return CONFIG.savingsCategories.includes(key);
+}
+function monthKey(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
+function monthLabel(key){
+  const [y,m] = key.split('-');
+  const names = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
+  return `${names[+m-1]} ${y}`;
+}
+
+async function loadData(){
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.spreadsheetId}/values/${encodeURIComponent(CONFIG.range)}?key=${CONFIG.apiKey}`;
+  let res, json;
+  try{
+    res = await fetch(url);
+    json = await res.json();
+  }catch(e){
+    showError('Не удалось обратиться к Google Sheets API.', String(e));
+    return;
+  }
+  if (!res.ok){
+    showError('Google Sheets API вернул ошибку. Проверьте API-ключ, что Sheets API включён в проекте, и что таблица доступна по ссылке для чтения.', JSON.stringify(json, null, 2));
+    return;
+  }
+  const values = json.values || [];
+  const rows = [];
+  catDisplayMap = new Map();
+  for (const r of values){
+    const date = parseDate(r[0]);
+    const amount = parseAmount(r[1]);
+    if (!date || isNaN(amount)) continue;
+    const rawCat = (r[3] || 'Без категории').trim();
+    const key = rawCat.toLowerCase();
+    const existing = catDisplayMap.get(key);
+    if (!existing || (/^[А-ЯA-Z]/.test(rawCat) && !/^[А-ЯA-Z]/.test(existing))){
+      catDisplayMap.set(key, rawCat);
+    }
+    rows.push({
+      date,
+      amount,
+      note: (r[2] || '').trim(),
+      categoryKey: key,
+      income: isIncomeType(r[4])
+    });
+  }
+  if (!rows.length){
+    showError('Данные загружены, но не удалось разобрать ни одной строки. Проверьте, что диапазон CONFIG.range указывает на правильный лист и что формат столбцов A–E совпадает с ожидаемым.', '');
+    return;
+  }
+  rows.forEach(r => { r.category = catDisplayMap.get(r.categoryKey); });
+  ROWS = rows;
+  CATEGORIES = [...catDisplayMap.keys()].sort((a,b) => catDisplayMap.get(a).localeCompare(catDisplayMap.get(b), 'ru'));
+  activeCategories = new Set(CATEGORIES);
+  buildCategoryList();
+  buildYearSelector();
+  buildMonthSelector();
+  document.getElementById('loadingState').style.display = 'none';
+  document.getElementById('content').style.display = 'block';
+  applyFilters();
+}
+
+function showError(msg, detail){
+  document.getElementById('loadingState').style.display = 'none';
+  const box = document.getElementById('errorState');
+  box.style.display = 'block';
+  box.innerHTML = msg + (detail ? `<code>${detail}</code>` : '');
+}
+
+/* ---------- фильтры (таблица/донат) ---------- */
+function buildCategoryList(){
+  const list = document.getElementById('catList');
+  list.innerHTML = '';
+  CATEGORIES.forEach(key => {
+    const label = document.createElement('label');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = true;
+    cb.value = key;
+    cb.addEventListener('change', () => {
+      if (cb.checked) activeCategories.add(key); else activeCategories.delete(key);
+      page = 0;
+      applyFilters();
+    });
+    label.appendChild(cb);
+    label.appendChild(document.createTextNode(catDisplayMap.get(key)));
+    list.appendChild(label);
+  });
+}
+document.getElementById('catSearch').addEventListener('input', e => {
+  const q = e.target.value.trim().toLowerCase();
+  document.querySelectorAll('#catList label').forEach(l => {
+    l.style.display = l.textContent.toLowerCase().includes(q) ? 'flex' : 'none';
+  });
+});
+document.getElementById('catAll').addEventListener('click', () => {
+  activeCategories = new Set(CATEGORIES);
+  document.querySelectorAll('#catList input').forEach(cb => cb.checked = true);
+  page = 0; applyFilters();
+});
+document.getElementById('catNone').addEventListener('click', () => {
+  activeCategories = new Set();
+  document.querySelectorAll('#catList input').forEach(cb => cb.checked = false);
+  page = 0; applyFilters();
+});
+
+document.getElementById('presetRow').addEventListener('click', e => {
+  const btn = e.target.closest('.chip');
+  if (!btn) return;
+  document.querySelectorAll('#presetRow .chip').forEach(c => c.classList.remove('active'));
+  btn.classList.add('active');
+  const preset = btn.dataset.preset;
+  const now = new Date();
+  let from = null, to = null;
+  if (preset === 'month'){ from = new Date(now.getFullYear(), now.getMonth(), 1); to = now; }
+  else if (preset === '3m'){ from = new Date(now.getFullYear(), now.getMonth() - 2, 1); to = now; }
+  else if (preset === 'year'){ from = new Date(now.getFullYear(), 0, 1); to = now; }
+  document.getElementById('dateFrom').value = from ? from.toISOString().slice(0,10) : '';
+  document.getElementById('dateTo').value = to ? to.toISOString().slice(0,10) : '';
+  page = 0; applyFilters();
+});
+['dateFrom','dateTo'].forEach(id => {
+  document.getElementById(id).addEventListener('change', () => { page = 0; applyFilters(); });
+});
+document.querySelectorAll('input[name=type]').forEach(r => {
+  r.addEventListener('change', () => { page = 0; applyFilters(); });
+});
+document.getElementById('freeSearch').addEventListener('input', () => { page = 0; applyFilters(); });
+
+document.getElementById('txHeader').addEventListener('click', () => {
+  const wrap = document.getElementById('txBodyWrap');
+  const caret = document.getElementById('txCaret');
+  const open = wrap.style.display !== 'none';
+  wrap.style.display = open ? 'none' : 'block';
+  caret.textContent = open ? '▸' : '▾';
+});
+
+function getFiltered(){
+  const from = document.getElementById('dateFrom').value ? new Date(document.getElementById('dateFrom').value) : null;
+  const to = document.getElementById('dateTo').value ? new Date(document.getElementById('dateTo').value) : null;
+  const type = document.querySelector('input[name=type]:checked').value;
+  const q = document.getElementById('freeSearch').value.trim().toLowerCase();
+
+  return ROWS.filter(r => {
+    if (from && r.date < from) return false;
+    if (to){ const end = new Date(to); end.setHours(23,59,59,999); if (r.date > end) return false; }
+    if (!activeCategories.has(r.categoryKey)) return false;
+    const savings = isSavingsCategory(r.categoryKey);
+    if (type === 'income' && !r.income) return false;
+    if (type === 'expense' && (r.income || savings)) return false;
+    if (type === 'savings' && !savings) return false;
+    if (q && !(r.note.toLowerCase().includes(q) || r.category.toLowerCase().includes(q))) return false;
+    return true;
+  });
+}
+
+/* ---------- рендер ---------- */
+function applyFilters(){
+  const rows = getFiltered();
+  renderSummary(rows);
+  try{ renderYearlyChart(); }catch(e){ console.error('yearly chart failed', e); }
+  try{ renderCompareChart(); }catch(e){ console.error('compare chart failed', e); }
+  try{ renderCategoryChart(rows); }catch(e){ console.error('category chart failed', e); }
+  renderTable(rows);
+  renderPeriodLabel();
+}
+
+function renderPeriodLabel(){
+  const from = document.getElementById('dateFrom').value;
+  const to = document.getElementById('dateTo').value;
+  const el = document.getElementById('periodLabel');
+  if (!from && !to) el.textContent = 'учёт доходов и расходов — всё время';
+  else el.textContent = `учёт доходов и расходов — ${from || 'начало'} — ${to || 'сегодня'}`;
+}
+
+function renderSummary(rows){
+  const income = rows.filter(r => r.income).reduce((s,r) => s + r.amount, 0);
+  const expense = rows.filter(r => !r.income).reduce((s,r) => s + r.amount, 0);
+  document.getElementById('sumIncome').textContent = money0(income);
+  document.getElementById('sumExpense').textContent = money0(expense);
+  document.getElementById('sumCount').textContent = rows.length.toLocaleString('ru-RU');
+}
+
+/* ---------- Динамика финансов (год) ---------- */
+function buildYearSelector(){
+  const years = [...new Set(ROWS.map(r => r.date.getFullYear()))].sort((a,b) => a-b);
+  selectedYear = years.length ? years[years.length-1] : new Date().getFullYear();
+  const row = document.getElementById('yearRow');
+  row.innerHTML = '';
+  years.forEach(y => {
+    const btn = document.createElement('button');
+    btn.className = 'chip' + (y === selectedYear ? ' active' : '');
+    btn.textContent = y;
+    btn.dataset.year = y;
+    btn.addEventListener('click', () => {
+      selectedYear = y;
+      row.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+      btn.classList.add('active');
+      renderYearlyChart();
+    });
+    row.appendChild(btn);
+  });
+}
+
+function renderYearlyChart(){
+  if (selectedYear == null) return;
+  const rows = ROWS.filter(r => activeCategories.has(r.categoryKey) && r.date.getFullYear() === selectedYear);
+  const buckets = Array.from({length:12}, () => ({income:0, expense:0, savings:0}));
+  rows.forEach(r => {
+    const m = r.date.getMonth();
+    const savings = isSavingsCategory(r.categoryKey);
+    if (r.income) buckets[m].income += r.amount;
+    else if (savings) buckets[m].savings += r.amount;
+    else buckets[m].expense += r.amount;
+  });
+  const monthNames = ['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек'];
+  const colors = chartColors();
+
+  const canvas = document.getElementById('yearlyChart');
+  canvas.parentElement.style.width = '100%';
+  const ctx = canvas.getContext('2d');
+  if (yearlyChart) yearlyChart.destroy();
+  yearlyChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: monthNames,
+      datasets: [
+        { label:'Доходы', data: buckets.map(b=>b.income), borderColor: colors.income, backgroundColor: colors.income+'26', fill:true, tension:0.35, pointRadius:3 },
+        { label:'Расходы', data: buckets.map(b=>b.expense), borderColor: colors.expense, backgroundColor: colors.expense+'26', fill:true, tension:0.35, pointRadius:3 },
+        { label:'Сбережения', data: buckets.map(b=>b.savings), borderColor: colors.savings, backgroundColor: colors.savings+'26', fill:true, tension:0.35, pointRadius:3 }
+      ]
+    },
+    options: {
+      responsive:true,
+      maintainAspectRatio:false,
+      interaction:{ mode:'index', intersect:false },
+      scales: {
+        x: { ticks:{ color:colors.tick, font:{ family:'IBM Plex Sans', size:11 } }, grid:{ color:colors.grid } },
+        y: { ticks:{ color:colors.tick, font:{ family:'IBM Plex Mono', size:11 } }, grid:{ color:colors.grid } }
+      },
+      plugins: {
+        legend: { labels:{ color:colors.legend, font:{ family:'IBM Plex Sans', size:12 } } }
+      }
+    }
+  });
+}
+
+/* ---------- Сравнение категорий расходов по месяцам ---------- */
+function buildMonthSelector(){
+  const months = [...new Set(ROWS.map(r => monthKey(r.date)))].sort().reverse();
+  selectedMonths = new Set(months.slice(0,1));
+  const list = document.getElementById('monthList');
+  list.innerHTML = '';
+  months.forEach(k => {
+    const label = document.createElement('label');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = selectedMonths.has(k);
+    cb.value = k;
+    cb.addEventListener('change', () => {
+      if (cb.checked) selectedMonths.add(k); else selectedMonths.delete(k);
+      renderCompareChart();
+    });
+    label.appendChild(cb);
+    label.appendChild(document.createTextNode(monthLabel(k)));
+    list.appendChild(label);
+  });
+}
+document.getElementById('topTenRow').addEventListener('click', e => {
+  const btn = e.target.closest('.chip');
+  if (!btn) return;
+  document.querySelectorAll('#topTenRow .chip').forEach(c => c.classList.remove('active'));
+  btn.classList.add('active');
+  topTenMode = btn.dataset.mode === 'top10';
+  renderCompareChart();
+});
+
+function renderCompareChart(){
+  const months = [...selectedMonths].sort();
+  const colors = chartColors();
+  const canvas = document.getElementById('compareChart');
+  const ctx = canvas.getContext('2d');
+
+  if (!months.length){
+    if (compareChart) compareChart.destroy();
+    canvas.parentElement.style.width = '100%';
+    return;
+  }
+
+  const perMonth = {};
+  months.forEach(k => { perMonth[k] = new Map(); });
+  ROWS.filter(r => activeCategories.has(r.categoryKey) && !r.income).forEach(r => {
+    const k = monthKey(r.date);
+    if (!perMonth[k]) return;
+    perMonth[k].set(r.categoryKey, (perMonth[k].get(r.categoryKey)||0) + r.amount);
+  });
+
+  const totals = new Map();
+  months.forEach(k => {
+    perMonth[k].forEach((v, cat) => totals.set(cat, (totals.get(cat)||0) + v));
+  });
+  let categoryKeys = [...totals.keys()].sort((a,b) => totals.get(b) - totals.get(a));
+  if (topTenMode) categoryKeys = categoryKeys.slice(0, 10);
+
+  const labels = categoryKeys.map(k => catDisplayMap.get(k) || k);
+  const datasets = months.map((k, i) => ({
+    label: monthLabel(k),
+    data: categoryKeys.map(ck => perMonth[k].get(ck) || 0),
+    backgroundColor: MONTH_COMPARE_PALETTE[i % MONTH_COMPARE_PALETTE.length]
+  }));
+
+  canvas.parentElement.style.width = Math.max(560, categoryKeys.length * months.length * 26) + 'px';
+
+  const barValueLabels = {
+    id:'barValueLabels',
+    afterDatasetsDraw(chart){
+      const c = chart.ctx;
+      chart.data.datasets.forEach((dataset, dsIndex) => {
+        const meta = chart.getDatasetMeta(dsIndex);
+        meta.data.forEach((bar, index) => {
+          const val = dataset.data[index];
+          if (!val) return;
+          const pos = bar.tooltipPosition();
+          c.save();
+          c.fillStyle = colors.legend;
+          c.font = '600 10px IBM Plex Mono, monospace';
+          c.textAlign = 'center';
+          c.fillText(Math.round(val).toLocaleString('ru-RU'), pos.x, pos.y - 6);
+          c.restore();
+        });
+      });
+    }
+  };
+
+  if (compareChart) compareChart.destroy();
+  compareChart = new Chart(ctx, {
+    type: 'bar',
+    data: { labels, datasets },
+    plugins: [barValueLabels],
+    options: {
+      responsive:true,
+      maintainAspectRatio:false,
+      scales: {
+        x: { ticks:{ color:colors.tick, font:{ family:'IBM Plex Sans', size:11 }, maxRotation:60, minRotation:30 }, grid:{ display:false } },
+        y: { ticks:{ color:colors.tick, font:{ family:'IBM Plex Mono', size:11 } }, grid:{ color:colors.grid } }
+      },
+      plugins: {
+        legend: { labels:{ color:colors.legend, font:{ family:'IBM Plex Sans', size:12 } } }
+      }
+    }
+  });
+}
+
+/* ---------- Категории расходов (донат) ---------- */
+function renderCategoryChart(rows){
+  const expenseRows = rows.filter(r => !r.income);
+  const map = new Map();
+  expenseRows.forEach(r => map.set(r.categoryKey, (map.get(r.categoryKey)||0) + r.amount));
+  const sorted = [...map.entries()].sort((a,b) => b[1]-a[1]);
+  const top = sorted.slice(0, 8);
+  const restSum = sorted.slice(8).reduce((s,[,v]) => s+v, 0);
+  const labels = top.map(([k]) => catDisplayMap.get(k) || k);
+  const data = top.map(([,v]) => v);
+  if (restSum > 0){ labels.push('Прочее'); data.push(restSum); }
+  const total = data.reduce((s,v)=>s+v,0) || 1;
+
+  const palette = ['#C1573B','#C9A24B','#7A9E8E','#8A5A44','#B08968','#5E7C6E','#A6432D','#D9B36C','#4E6B5F'];
+  const colors = chartColors();
+
+  const donutLabelsPlugin = {
+    id: 'donutLabels',
+    afterDatasetsDraw(chart){
+      const {ctx} = chart;
+      chart.data.datasets.forEach((dataset, dsIndex) => {
+        const meta = chart.getDatasetMeta(dsIndex);
+        meta.data.forEach((arc, index) => {
+          const val = dataset.data[index];
+          const pct = val/total*100;
+          if (pct < 5) return;
+          const pos = arc.tooltipPosition();
+          ctx.save();
+          ctx.fillStyle = '#fff';
+          ctx.font = '600 11px IBM Plex Sans, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(pct.toFixed(0)+'%', pos.x, pos.y);
+          ctx.restore();
+        });
+      });
+    }
+  };
+  const centerTextPlugin = {
+    id: 'centerText',
+    afterDraw(chart){
+      const {ctx, chartArea} = chart;
+      if (!chartArea) return;
+      const cx = (chartArea.left+chartArea.right)/2;
+      const cy = (chartArea.top+chartArea.bottom)/2;
+      ctx.save();
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = colors.centerMuted;
+      ctx.font = '11px IBM Plex Sans, sans-serif';
+      ctx.fillText('всего расходов', cx, cy-10);
+      ctx.fillStyle = colors.centerText;
+      ctx.font = '600 15px IBM Plex Mono, monospace';
+      ctx.fillText(money0(total), cx, cy+10);
+      ctx.restore();
+    }
+  };
+
+  const ctx = document.getElementById('categoryChart').getContext('2d');
+  if (categoryChart) categoryChart.destroy();
+  categoryChart = new Chart(ctx, {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data, backgroundColor: palette, borderColor: colors.donutBorder, borderWidth: 2 }] },
+    plugins: [donutLabelsPlugin, centerTextPlugin],
+    options: {
+      plugins: {
+        legend: { position:'bottom', labels:{ color:colors.legend, font:{ family:'IBM Plex Sans', size:11 }, boxWidth:12 } }
+      },
+      onHover: (evt, elements) => {
+        document.querySelectorAll('#topCatTable tbody tr').forEach(tr => tr.classList.remove('hl'));
+        if (elements.length){
+          const trs = document.querySelectorAll('#topCatTable tbody tr');
+          if (trs[elements[0].index]) trs[elements[0].index].classList.add('hl');
+        }
+      }
+    }
+  });
+
+  const tbody = document.querySelector('#topCatTable tbody');
+  tbody.innerHTML = '';
+  top.forEach(([key, val], i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td style="border-left:3px solid ${palette[i]};padding-left:8px;">${catDisplayMap.get(key) || key}</td>
+                     <td class="amt mono">${money(val)}</td>
+                     <td class="amt mono" style="color:var(--muted)">${(val/total*100).toFixed(1)}%</td>`;
+    tr.addEventListener('mouseenter', () => {
+      categoryChart.setActiveElements([{datasetIndex:0, index:i}]);
+      categoryChart.tooltip.setActiveElements([{datasetIndex:0, index:i}], {x:0,y:0});
+      categoryChart.update();
+    });
+    tr.addEventListener('mouseleave', () => {
+      categoryChart.setActiveElements([]);
+      categoryChart.tooltip.setActiveElements([], {x:0,y:0});
+      categoryChart.update();
+    });
+    tbody.appendChild(tr);
+  });
+}
+
+/* ---------- Операции ---------- */
+function renderTable(rows){
+  const sorted = [...rows].sort((a,b) => {
+    let av, bv;
+    if (sortState.key === 'date'){ av=a.date; bv=b.date; }
+    else if (sortState.key === 'amount'){ av=a.amount; bv=b.amount; }
+    else if (sortState.key === 'category'){ av=a.category.toLowerCase(); bv=b.category.toLowerCase(); }
+    else { av=a[sortState.key].toLowerCase(); bv=b[sortState.key].toLowerCase(); }
+    if (av < bv) return sortState.dir === 'asc' ? -1 : 1;
+    if (av > bv) return sortState.dir === 'asc' ? 1 : -1;
+    return 0;
+  });
+  const start = page * PAGE_SIZE;
+  const pageRows = sorted.slice(start, start + PAGE_SIZE);
+  const tbody = document.getElementById('txBody');
+  tbody.innerHTML = '';
+  if (!pageRows.length){
+    tbody.innerHTML = `<tr><td colspan="4" style="color:var(--muted);padding:24px 10px;">Нет операций по выбранным фильтрам.</td></tr>`;
+  }
+  pageRows.forEach(r => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="mono">${r.date.toLocaleDateString('ru-RU')}</td>
+      <td>${r.category}</td>
+      <td style="color:var(--muted)">${r.note || ''}</td>
+      <td class="amt mono ${r.income ? 'type-income' : 'type-expense'}">${r.income ? '+' : '−'}${money(r.amount)}</td>`;
+    tbody.appendChild(tr);
+  });
+  const total = sorted.length;
+  const lastPage = Math.max(0, Math.ceil(total / PAGE_SIZE) - 1);
+  document.getElementById('pageInfo').textContent =
+    total ? `Показано ${start+1}–${Math.min(start+PAGE_SIZE,total)} из ${total}` : '';
+  document.getElementById('prevPage').disabled = page === 0;
+  document.getElementById('nextPage').disabled = page >= lastPage;
+  document.getElementById('txHeaderCount').textContent = `(${total.toLocaleString('ru-RU')})`;
+}
+document.getElementById('prevPage').addEventListener('click', () => { if (page>0){ page--; applyFilters(); } });
+document.getElementById('nextPage').addEventListener('click', () => { page++; applyFilters(); });
+
+document.querySelectorAll('table.tx thead th[data-sort]').forEach(th => {
+  th.addEventListener('click', () => {
+    const key = th.dataset.sort;
+    if (sortState.key === key) sortState.dir = sortState.dir === 'asc' ? 'desc' : 'asc';
+    else { sortState.key = key; sortState.dir = 'asc'; }
+    page = 0;
+    applyFilters();
+  });
+});
+
+loadData();
+</script>
+</body>
+</html>
