@@ -452,10 +452,11 @@
     <div class="filter-group">
       <h2>Период (таблица и категории)</h2>
       <div class="preset-row" id="presetRow">
-        <button class="chip" data-preset="month">Этот месяц</button>
+        <button class="chip" data-preset="today">За сегодня</button>
+        <button class="chip active" data-preset="month">Этот месяц</button>
         <button class="chip" data-preset="3m">3 месяца</button>
         <button class="chip" data-preset="year">Этот год</button>
-        <button class="chip active" data-preset="all">Всё время</button>
+        <button class="chip" data-preset="all">Всё время</button>
       </div>
       <div class="date-group">
         <div class="date-col">
@@ -770,21 +771,27 @@ document.getElementById('catNone').addEventListener('click', () => {
   page = 0; applyFilters();
 });
 
+function localDateStr(d){
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function setPreset(preset){
+  document.querySelectorAll('#presetRow .chip').forEach(c => c.classList.toggle('active', c.dataset.preset === preset));
+  const now = new Date();
+  let from = null, to = null;
+  if (preset === 'today'){ from = new Date(now.getFullYear(), now.getMonth(), now.getDate()); to = now; }
+  else if (preset === 'month'){ from = new Date(now.getFullYear(), now.getMonth(), 1); to = now; }
+  else if (preset === '3m'){ from = new Date(now.getFullYear(), now.getMonth() - 2, 1); to = now; }
+  else if (preset === 'year'){ from = new Date(now.getFullYear(), 0, 1); to = now; }
+  document.getElementById('dateFrom').value = from ? localDateStr(from) : '';
+  document.getElementById('dateTo').value = to ? localDateStr(to) : '';
+}
 document.getElementById('presetRow').addEventListener('click', e => {
   const btn = e.target.closest('.chip');
   if (!btn) return;
-  document.querySelectorAll('#presetRow .chip').forEach(c => c.classList.remove('active'));
-  btn.classList.add('active');
-  const preset = btn.dataset.preset;
-  const now = new Date();
-  let from = null, to = null;
-  if (preset === 'month'){ from = new Date(now.getFullYear(), now.getMonth(), 1); to = now; }
-  else if (preset === '3m'){ from = new Date(now.getFullYear(), now.getMonth() - 2, 1); to = now; }
-  else if (preset === 'year'){ from = new Date(now.getFullYear(), 0, 1); to = now; }
-  document.getElementById('dateFrom').value = from ? from.toISOString().slice(0,10) : '';
-  document.getElementById('dateTo').value = to ? to.toISOString().slice(0,10) : '';
+  setPreset(btn.dataset.preset);
   page = 0; applyFilters();
 });
+setPreset('month');
 ['dateFrom','dateTo'].forEach(id => {
   document.getElementById(id).addEventListener('change', () => { page = 0; applyFilters(); });
 });
@@ -801,9 +808,15 @@ document.getElementById('txHeader').addEventListener('click', () => {
   caret.textContent = open ? '▸' : '▾';
 });
 
+function parseLocalDateInput(str){
+  const [y, m, d] = str.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
 function getFiltered(){
-  const from = document.getElementById('dateFrom').value ? new Date(document.getElementById('dateFrom').value) : null;
-  const to = document.getElementById('dateTo').value ? new Date(document.getElementById('dateTo').value) : null;
+  const fromVal = document.getElementById('dateFrom').value;
+  const toVal = document.getElementById('dateTo').value;
+  const from = fromVal ? parseLocalDateInput(fromVal) : null;
+  const to = toVal ? parseLocalDateInput(toVal) : null;
   const type = document.querySelector('input[name=type]:checked').value;
   const q = document.getElementById('freeSearch').value.trim().toLowerCase();
 
