@@ -18,37 +18,41 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
   :root{
-    --bg:#F3EFE4;
-    --panel:#EAE3D0;
-    --panel-alt:#E2DAC3;
-    --text:#22302A;
-    --text-dim:#4B5A52;
-    --muted:#74847B;
-    --income:#8A6A1E;
-    --income-dim:#B79A57;
-    --expense:#96341F;
-    --expense-dim:#C48470;
-    --savings:#3F6B5C;
-    --line:#DBD2BA;
-    --line-soft:#E6DFC9;
-    --focus:#22302A;
+    --bg:#F4F7FA;
+    --panel:#EAF0F6;
+    --panel-alt:#DCE7F1;
+    --text:#1B2733;
+    --text-dim:#48586A;
+    --muted:#7F8FA0;
+    --accent:#025EA1;
+    --accent-soft:#6CACE4;
+    --income:#2E8B3D;
+    --income-dim:#7FB98A;
+    --expense:#C82D22;
+    --expense-dim:#D98F86;
+    --savings:#1E7F76;
+    --line:#D3DFEA;
+    --line-soft:#E3EBF3;
+    --focus:#003274;
     --radius:2px;
   }
   html[data-theme="dark"]{
-    --bg:#0E211C;
-    --panel:#152E27;
-    --panel-alt:#1B3A31;
-    --text:#E9E4D3;
-    --text-dim:#C9C2AC;
-    --muted:#8FA69B;
-    --income:#C9A24B;
-    --income-dim:#8A7238;
-    --expense:#C1573B;
-    --expense-dim:#8A4030;
-    --savings:#7A9E8E;
-    --line:#2A4A40;
-    --line-soft:#203c34;
-    --focus:#E9E4D3;
+    --bg:#0A1E33;
+    --panel:#0F2A47;
+    --panel-alt:#153658;
+    --text:#E7EEF6;
+    --text-dim:#BBCADA;
+    --muted:#8098AF;
+    --accent:#6CACE4;
+    --accent-soft:#3F86BE;
+    --income:#63C56B;
+    --income-dim:#3E7A45;
+    --expense:#FF7A64;
+    --expense-dim:#9C4536;
+    --savings:#4FC2B0;
+    --line:#1D3E5F;
+    --line-soft:#173252;
+    --focus:#6CACE4;
   }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;}
@@ -70,7 +74,7 @@
     font-family:'IBM Plex Mono',monospace;
     font-variant-numeric:tabular-nums;
   }
-  a{color:var(--income);}
+  a{color:var(--accent);}
   button, select, input{
     font-family:inherit;
     color:inherit;
@@ -115,7 +119,7 @@
     cursor:pointer;
     user-select:none;
   }
-  .theme-toggle input{accent-color:var(--income);}
+  .theme-toggle input{accent-color:var(--accent);}
   .balance-block{
     text-align:right;
   }
@@ -199,8 +203,8 @@
   .chip:hover{border-color:var(--muted);color:var(--text);}
   .chip.active{
     background:var(--panel-alt);
-    border-color:var(--income-dim);
-    color:var(--income);
+    border-color:var(--accent-soft);
+    color:var(--accent);
   }
   .date-group{display:flex;flex-direction:column;gap:10px;}
   .date-col{display:flex;flex-direction:column;gap:4px;}
@@ -248,7 +252,7 @@
     font-size:12.5px;color:var(--text-dim);
     cursor:pointer;
   }
-  .cat-list input,.type-toggle input{accent-color:var(--income);}
+  .cat-list input,.type-toggle input{accent-color:var(--accent);}
   .free-search{
     width:100%;
     background:var(--panel);
@@ -347,7 +351,7 @@
     font-size:12.5px;color:var(--text-dim);
     cursor:pointer;
   }
-  .month-list input{accent-color:var(--income);}
+  .month-list input{accent-color:var(--accent);}
   .compare-side{display:flex;flex-direction:column;justify-content:space-between;}
   .compare-hint{font-size:12px;color:var(--muted);margin-top:6px;}
 
@@ -623,10 +627,10 @@ themeToggle.addEventListener('change', () => {
 function isDark(){ return document.documentElement.getAttribute('data-theme') === 'dark'; }
 function chartColors(){
   return isDark()
-    ? { grid:'#203c34', tick:'#8FA69B', legend:'#C9C2AC', income:'#C9A24B', expense:'#C1573B', savings:'#7A9E8E', donutBorder:'#0E211C', centerMuted:'#8FA69B', centerText:'#E9E4D3' }
-    : { grid:'#DBD2BA', tick:'#74847B', legend:'#4B5A52', income:'#A67C1E', expense:'#A6432D', savings:'#3F6B5C', donutBorder:'#F3EFE4', centerMuted:'#74847B', centerText:'#22302A' };
+    ? { grid:'#1D3E5F', tick:'#8098AF', legend:'#BBCADA', income:'#63C56B', expense:'#FF7A64', savings:'#4FC2B0', donutBorder:'#0A1E33', centerMuted:'#8098AF', centerText:'#E7EEF6' }
+    : { grid:'#D3DFEA', tick:'#7F8FA0', legend:'#48586A', income:'#2E8B3D', expense:'#C82D22', savings:'#1E7F76', donutBorder:'#F4F7FA', centerMuted:'#7F8FA0', centerText:'#1B2733' };
 }
-const MONTH_COMPARE_PALETTE = ['#C1573B','#C9A24B','#7A9E8E','#8A5A44','#5E7C6E','#B08968'];
+const MONTH_COMPARE_PALETTE = ['#025EA1','#6CACE4','#259789','#FD6925','#003274','#7F98B0'];
 
 let ROWS = [];
 let CATEGORIES = [];
@@ -1026,7 +1030,7 @@ function renderCategoryChart(rows){
   if (restSum > 0){ labels.push('Прочее'); data.push(restSum); }
   const total = data.reduce((s,v)=>s+v,0) || 1;
 
-  const palette = ['#C1573B','#C9A24B','#7A9E8E','#8A5A44','#B08968','#5E7C6E','#A6432D','#D9B36C','#4E6B5F'];
+  const palette = ['#025EA1','#6CACE4','#259789','#FD6925','#E20079','#FCC30B','#56C02B','#003274','#7F98B0'];
   const colors = chartColors();
 
   const donutLabelsPlugin = {
