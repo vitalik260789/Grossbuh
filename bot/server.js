@@ -56,18 +56,15 @@ async function appendRow({ amount, category, note, sheetType }) {
   ].join('.');
   const amountStr = amount.toFixed(2).replace('.', ',');
 
-  const res = await fetch(APPS_SCRIPT_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      secret: APPS_SCRIPT_SECRET,
-      date: dateStr,
-      amount: amountStr,
-      note: note || '',
-      category,
-      type: sheetType
-    })
-  });
+  const url = new URL(APPS_SCRIPT_URL);
+  url.searchParams.set('secret', APPS_SCRIPT_SECRET);
+  url.searchParams.set('date', dateStr);
+  url.searchParams.set('amount', amountStr);
+  url.searchParams.set('note', note || '');
+  url.searchParams.set('category', category);
+  url.searchParams.set('type', sheetType);
+
+  const res = await fetch(url.toString());
   const json = await res.json();
   if (!json.ok) throw new Error(json.error || 'apps script вернул ошибку');
 }
