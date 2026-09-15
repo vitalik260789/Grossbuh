@@ -313,9 +313,6 @@
   .chart-inner{
     min-width:100%;
   }
-  .chart-scroll canvas{
-    min-width:520px;
-  }
   .charts-two{
     display:grid;
     grid-template-columns:1.4fr 1fr;
@@ -1020,8 +1017,8 @@ function renderMonthlyLineChart(){
       maintainAspectRatio:false,
       interaction:{ mode:'index', intersect:false },
       scales: {
-        x: { ticks:{ color:colors.tick, font:{ family:'IBM Plex Sans', size:11 } }, grid:{ color:colors.grid } },
-        y: { ticks:{ color:colors.tick, font:{ family:'IBM Plex Mono', size:11 }, callback:compactAxisNumber }, grid:{ color:colors.grid } }
+        x: { ticks:{ color:colors.tick, font:{ family:'IBM Plex Sans', size:11 } }, grid:{ display:false } },
+        y: { beginAtZero:true, ticks:{ color:colors.tick, font:{ family:'IBM Plex Mono', size:11 }, callback:compactAxisNumber }, grid:{ color:colors.grid } }
       },
       plugins: {
         legend: {
