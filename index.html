@@ -462,6 +462,8 @@
         <button class="chip" data-month="9">Окт</button>
         <button class="chip" data-month="10">Ноя</button>
         <button class="chip" data-month="11">Дек</button>
+        <button class="chip" data-preset="today">Сегодня</button>
+        <button class="chip" data-preset="7d">7 дней</button>
       </div>
     </div>
 
@@ -680,6 +682,7 @@ let topTenMode = true;
 let yearSummaryMode = 'all';
 let filterYear = 'all';
 let filterMonths = new Set();
+let filterDateRange = null;
 
 function makeBarValueLabelsPlugin(colors, opts){
   opts = opts || {};
@@ -854,6 +857,8 @@ function buildYearFilter(){
 }
 document.getElementById('yearFilter').addEventListener('change', () => {
   filterYear = document.getElementById('yearFilter').value;
+  filterDateRange = null;
+  document.querySelectorAll('#monthFilterRow .chip[data-preset]').forEach(b => b.classList.remove('active'));
   page = 0;
   syncSelectedYearFromFilter();
   applyFilters();
@@ -861,12 +866,30 @@ document.getElementById('yearFilter').addEventListener('change', () => {
 document.getElementById('monthFilterRow').addEventListener('click', e => {
   const btn = e.target.closest('.chip');
   if (!btn) return;
+  if (btn.dataset.preset){
+    applyDatePreset(btn.dataset.preset);
+    return;
+  }
+  filterDateRange = null;
+  document.querySelectorAll('#monthFilterRow .chip[data-preset]').forEach(b => b.classList.remove('active'));
   const m = Number(btn.dataset.month);
   btn.classList.toggle('active');
   if (filterMonths.has(m)) filterMonths.delete(m); else filterMonths.add(m);
   page = 0;
   applyFilters();
 });
+function applyDatePreset(preset){
+  const now = new Date();
+  let from;
+  if (preset === 'today') from = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  else if (preset === '7d') from = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
+  filterDateRange = { from, to: now };
+  filterMonths.clear();
+  document.querySelectorAll('#monthFilterRow .chip').forEach(b => b.classList.remove('active'));
+  document.querySelector(`#monthFilterRow .chip[data-preset="${preset}"]`).classList.add('active');
+  page = 0;
+  applyFilters();
+}
 document.querySelectorAll('input[name=type]').forEach(r => {
   r.addEventListener('change', () => { page = 0; applyFilters(); });
 });
@@ -885,8 +908,14 @@ function getFiltered(){
   const q = document.getElementById('freeSearch').value.trim().toLowerCase();
 
   return ROWS.filter(r => {
-    if (filterYear !== 'all' && r.date.getFullYear() !== Number(filterYear)) return false;
-    if (filterMonths.size && !filterMonths.has(r.date.getMonth())) return false;
+    if (filterDateRange){
+      if (r.date < filterDateRange.from) return false;
+      const end = new Date(filterDateRange.to); end.setHours(23,59,59,999);
+      if (r.date > end) return false;
+    } else {
+      if (filterYear !== 'all' && r.date.getFullYear() !== Number(filterYear)) return false;
+      if (filterMonths.size && !filterMonths.has(r.date.getMonth())) return false;
+    }
     if (!activeCategories.has(r.categoryKey)) return false;
     const savings = isSavingsCategory(r.categoryKey);
     if (type === 'income' && !r.income) return false;
@@ -913,6 +942,11 @@ function applyFilters(){
 const MONTH_NAMES_SHORT = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
 function renderPeriodLabel(){
   const el = document.getElementById('periodLabel');
+  if (filterDateRange){
+    const fmt = d => d.toLocaleDateString('ru-RU');
+    el.textContent = `учёт доходов и расходов — ${fmt(filterDateRange.from)} — ${fmt(filterDateRange.to)}`;
+    return;
+  }
   const yearPart = filterYear === 'all' ? 'всё время' : filterYear;
   const monthsPart = filterMonths.size
     ? ' — ' + [...filterMonths].sort((a,b) => a-b).map(m => MONTH_NAMES_SHORT[m]).join(', ')
