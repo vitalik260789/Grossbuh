@@ -206,18 +206,7 @@
     border-color:var(--accent-soft);
     color:var(--accent);
   }
-  .date-group{display:flex;flex-direction:column;gap:10px;}
-  .date-col{display:flex;flex-direction:column;gap:4px;}
-  .date-label{font-size:11px;color:var(--muted);}
-  .date-col input[type=date]{
-    background:var(--panel);
-    border:1px solid var(--line);
-    color:var(--text);
-    padding:6px 8px;
-    border-radius:var(--radius);
-    width:100%;
-    font-size:12.5px;
-  }
+  .year-select{margin-bottom:10px;cursor:pointer;}
   .type-toggle{display:flex;flex-direction:column;gap:6px;}
   .type-toggle label{
     display:flex;align-items:center;gap:8px;
@@ -455,22 +444,22 @@
   <aside class="filters">
     <div class="filter-group">
       <h2>Период (таблица и категории)</h2>
-      <div class="preset-row" id="presetRow">
-        <button class="chip" data-preset="today">За сегодня</button>
-        <button class="chip active" data-preset="month">Этот месяц</button>
-        <button class="chip" data-preset="3m">3 месяца</button>
-        <button class="chip" data-preset="year">Этот год</button>
-        <button class="chip" data-preset="all">Всё время</button>
-      </div>
-      <div class="date-group">
-        <div class="date-col">
-          <label class="date-label" for="dateFrom">с</label>
-          <input type="date" id="dateFrom">
-        </div>
-        <div class="date-col">
-          <label class="date-label" for="dateTo">по</label>
-          <input type="date" id="dateTo">
-        </div>
+      <select class="free-search year-select" id="yearFilter">
+        <option value="all">Все года</option>
+      </select>
+      <div class="preset-row" id="monthFilterRow">
+        <button class="chip" data-month="0">Янв</button>
+        <button class="chip" data-month="1">Фев</button>
+        <button class="chip" data-month="2">Мар</button>
+        <button class="chip" data-month="3">Апр</button>
+        <button class="chip" data-month="4">Май</button>
+        <button class="chip" data-month="5">Июн</button>
+        <button class="chip" data-month="6">Июл</button>
+        <button class="chip" data-month="7">Авг</button>
+        <button class="chip" data-month="8">Сен</button>
+        <button class="chip" data-month="9">Окт</button>
+        <button class="chip" data-month="10">Ноя</button>
+        <button class="chip" data-month="11">Дек</button>
       </div>
     </div>
 
@@ -555,7 +544,7 @@
       <section class="block">
         <div class="chart-header-row">
           <h2>Сведения по месяцам</h2>
-          <div class="preset-row" id="yearRow"></div>
+          <span class="mono" id="monthlyChartYearLabel" style="color:var(--muted);font-size:13px;"></span>
         </div>
         <div class="chart-scroll">
           <div class="chart-inner">
@@ -673,6 +662,8 @@ let selectedYear = null;
 let selectedMonths = new Set();
 let topTenMode = true;
 let yearSummaryMode = 'all';
+let filterYear = 'all';
+let filterMonths = new Set();
 
 function makeBarValueLabelsPlugin(colors){
   return {
@@ -772,7 +763,8 @@ async function loadData(){
   CATEGORIES = [...catDisplayMap.keys()].sort((a,b) => catDisplayMap.get(a).localeCompare(catDisplayMap.get(b), 'ru'));
   activeCategories = new Set(CATEGORIES);
   buildCategoryList();
-  buildYearSelector();
+  buildYearFilter();
+  syncSelectedYearFromFilter();
   buildMonthSelector();
   document.getElementById('loadingState').style.display = 'none';
   document.getElementById('content').style.display = 'block';
@@ -823,29 +815,28 @@ document.getElementById('catNone').addEventListener('click', () => {
   page = 0; applyFilters();
 });
 
-function localDateStr(d){
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+function buildYearFilter(){
+  const years = [...new Set(ROWS.map(r => r.date.getFullYear()))].sort((a,b) => b-a);
+  const sel = document.getElementById('yearFilter');
+  sel.innerHTML = '<option value="all">Все года</option>' +
+    years.map(y => `<option value="${y}">${y}</option>`).join('');
+  filterYear = years.length ? String(years[0]) : 'all';
+  sel.value = filterYear;
 }
-function setPreset(preset){
-  document.querySelectorAll('#presetRow .chip').forEach(c => c.classList.toggle('active', c.dataset.preset === preset));
-  const now = new Date();
-  let from = null, to = null;
-  if (preset === 'today'){ from = new Date(now.getFullYear(), now.getMonth(), now.getDate()); to = now; }
-  else if (preset === 'month'){ from = new Date(now.getFullYear(), now.getMonth(), 1); to = now; }
-  else if (preset === '3m'){ from = new Date(now.getFullYear(), now.getMonth() - 2, 1); to = now; }
-  else if (preset === 'year'){ from = new Date(now.getFullYear(), 0, 1); to = now; }
-  document.getElementById('dateFrom').value = from ? localDateStr(from) : '';
-  document.getElementById('dateTo').value = to ? localDateStr(to) : '';
-}
-document.getElementById('presetRow').addEventListener('click', e => {
+document.getElementById('yearFilter').addEventListener('change', () => {
+  filterYear = document.getElementById('yearFilter').value;
+  page = 0;
+  syncSelectedYearFromFilter();
+  applyFilters();
+});
+document.getElementById('monthFilterRow').addEventListener('click', e => {
   const btn = e.target.closest('.chip');
   if (!btn) return;
-  setPreset(btn.dataset.preset);
-  page = 0; applyFilters();
-});
-setPreset('month');
-['dateFrom','dateTo'].forEach(id => {
-  document.getElementById(id).addEventListener('change', () => { page = 0; applyFilters(); });
+  const m = Number(btn.dataset.month);
+  btn.classList.toggle('active');
+  if (filterMonths.has(m)) filterMonths.delete(m); else filterMonths.add(m);
+  page = 0;
+  applyFilters();
 });
 document.querySelectorAll('input[name=type]').forEach(r => {
   r.addEventListener('change', () => { page = 0; applyFilters(); });
@@ -860,21 +851,13 @@ document.getElementById('txHeader').addEventListener('click', () => {
   caret.textContent = open ? '▸' : '▾';
 });
 
-function parseLocalDateInput(str){
-  const [y, m, d] = str.split('-').map(Number);
-  return new Date(y, m - 1, d);
-}
 function getFiltered(){
-  const fromVal = document.getElementById('dateFrom').value;
-  const toVal = document.getElementById('dateTo').value;
-  const from = fromVal ? parseLocalDateInput(fromVal) : null;
-  const to = toVal ? parseLocalDateInput(toVal) : null;
   const type = document.querySelector('input[name=type]:checked').value;
   const q = document.getElementById('freeSearch').value.trim().toLowerCase();
 
   return ROWS.filter(r => {
-    if (from && r.date < from) return false;
-    if (to){ const end = new Date(to); end.setHours(23,59,59,999); if (r.date > end) return false; }
+    if (filterYear !== 'all' && r.date.getFullYear() !== Number(filterYear)) return false;
+    if (filterMonths.size && !filterMonths.has(r.date.getMonth())) return false;
     if (!activeCategories.has(r.categoryKey)) return false;
     const savings = isSavingsCategory(r.categoryKey);
     if (type === 'income' && !r.income) return false;
@@ -897,12 +880,14 @@ function applyFilters(){
   renderPeriodLabel();
 }
 
+const MONTH_NAMES_SHORT = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
 function renderPeriodLabel(){
-  const from = document.getElementById('dateFrom').value;
-  const to = document.getElementById('dateTo').value;
   const el = document.getElementById('periodLabel');
-  if (!from && !to) el.textContent = 'учёт доходов и расходов — всё время';
-  else el.textContent = `учёт доходов и расходов — ${from || 'начало'} — ${to || 'сегодня'}`;
+  const yearPart = filterYear === 'all' ? 'всё время' : filterYear;
+  const monthsPart = filterMonths.size
+    ? ' — ' + [...filterMonths].sort((a,b) => a-b).map(m => MONTH_NAMES_SHORT[m]).join(', ')
+    : '';
+  el.textContent = `учёт доходов и расходов — ${yearPart}${monthsPart}`;
 }
 
 function renderSummary(rows){
@@ -913,29 +898,19 @@ function renderSummary(rows){
   document.getElementById('sumCount').textContent = rows.length.toLocaleString('ru-RU');
 }
 
-/* ---------- Динамика финансов (год) ---------- */
-function buildYearSelector(){
-  const years = [...new Set(ROWS.map(r => r.date.getFullYear()))].sort((a,b) => a-b);
-  selectedYear = years.length ? years[years.length-1] : new Date().getFullYear();
-  const row = document.getElementById('yearRow');
-  row.innerHTML = '';
-  years.forEach(y => {
-    const btn = document.createElement('button');
-    btn.className = 'chip' + (y === selectedYear ? ' active' : '');
-    btn.textContent = y;
-    btn.dataset.year = y;
-    btn.addEventListener('click', () => {
-      selectedYear = y;
-      row.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
-      btn.classList.add('active');
-      renderYearlyChart();
-    });
-    row.appendChild(btn);
-  });
+/* ---------- Сведения по месяцам (год из фильтра) ---------- */
+function syncSelectedYearFromFilter(){
+  if (filterYear !== 'all'){
+    selectedYear = Number(filterYear);
+  } else if (selectedYear == null){
+    const years = [...new Set(ROWS.map(r => r.date.getFullYear()))].sort((a,b) => a-b);
+    selectedYear = years.length ? years[years.length-1] : new Date().getFullYear();
+  }
 }
 
 function renderYearlyChart(){
   if (selectedYear == null) return;
+  document.getElementById('monthlyChartYearLabel').textContent = selectedYear;
   const rows = ROWS.filter(r => activeCategories.has(r.categoryKey) && r.date.getFullYear() === selectedYear);
   const buckets = Array.from({length:12}, () => ({income:0, expense:0, savings:0}));
   rows.forEach(r => {
