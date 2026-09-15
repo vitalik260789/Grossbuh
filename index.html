@@ -826,8 +826,15 @@ function buildYearFilter(){
   const sel = document.getElementById('yearFilter');
   sel.innerHTML = '<option value="all">Все года</option>' +
     years.map(y => `<option value="${y}">${y}</option>`).join('');
-  filterYear = years.length ? String(years[0]) : 'all';
+  const currentYear = new Date().getFullYear();
+  filterYear = years.includes(currentYear) ? String(currentYear) : (years.length ? String(years[0]) : 'all');
   sel.value = filterYear;
+
+  const currentMonth = new Date().getMonth();
+  filterMonths = new Set([currentMonth]);
+  document.querySelectorAll('#monthFilterRow .chip').forEach(btn => {
+    btn.classList.toggle('active', Number(btn.dataset.month) === currentMonth);
+  });
 }
 document.getElementById('yearFilter').addEventListener('change', () => {
   filterYear = document.getElementById('yearFilter').value;
