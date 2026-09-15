@@ -314,6 +314,10 @@
   .chart-scroll{
     overflow-x:auto;
     padding-bottom:6px;
+    max-width:100%;
+  }
+  .chart-inner{
+    min-width:100%;
   }
   .chart-scroll canvas{
     min-width:520px;
@@ -535,11 +539,28 @@
 
       <section class="block">
         <div class="chart-header-row">
-          <h2>Динамика финансов</h2>
+          <h2>Сведения по годам</h2>
+          <div class="preset-row" id="yearSummaryRow">
+            <button class="chip active" data-range="all">Все года</button>
+            <button class="chip" data-range="5">Последние 5 лет</button>
+          </div>
+        </div>
+        <div class="chart-scroll">
+          <div class="chart-inner">
+            <canvas id="yearSummaryChart" height="90"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <section class="block">
+        <div class="chart-header-row">
+          <h2>Сведения по месяцам</h2>
           <div class="preset-row" id="yearRow"></div>
         </div>
         <div class="chart-scroll">
-          <canvas id="yearlyChart" height="90"></canvas>
+          <div class="chart-inner">
+            <canvas id="yearlyChart" height="90"></canvas>
+          </div>
         </div>
       </section>
 
@@ -558,7 +579,9 @@
           </div>
         </div>
         <div class="chart-scroll">
-          <canvas id="compareChart" height="90"></canvas>
+          <div class="chart-inner">
+            <canvas id="compareChart" height="90"></canvas>
+          </div>
         </div>
       </section>
 
@@ -632,6 +655,11 @@ function chartColors(){
     : { grid:'#D3DFEA', tick:'#7F8FA0', legend:'#48586A', income:'#2E8B3D', expense:'#C82D22', savings:'#1E7F76', donutBorder:'#F4F7FA', centerMuted:'#7F8FA0', centerText:'#1B2733' };
 }
 const MONTH_COMPARE_PALETTE = ['#025EA1','#6CACE4','#259789','#FD6925','#003274','#7F98B0'];
+function compactAxisNumber(v){
+  const n = Math.abs(v);
+  if (n >= 1000) return (v/1000).toLocaleString('ru-RU', { maximumFractionDigits: 1 }) + 'k';
+  return v.toLocaleString('ru-RU');
+}
 
 let ROWS = [];
 let CATEGORIES = [];
@@ -640,10 +668,34 @@ let activeCategories = new Set();
 let sortState = { key: 'date', dir: 'desc' };
 let page = 0;
 const PAGE_SIZE = 25;
-let categoryChart, yearlyChart, compareChart;
+let categoryChart, yearlyChart, compareChart, yearSummaryChart;
 let selectedYear = null;
 let selectedMonths = new Set();
 let topTenMode = true;
+let yearSummaryMode = 'all';
+
+function makeBarValueLabelsPlugin(colors){
+  return {
+    id: 'barValueLabels',
+    afterDatasetsDraw(chart){
+      const c = chart.ctx;
+      chart.data.datasets.forEach((dataset, dsIndex) => {
+        const meta = chart.getDatasetMeta(dsIndex);
+        meta.data.forEach((bar, index) => {
+          const val = dataset.data[index];
+          if (!val) return;
+          const pos = bar.tooltipPosition();
+          c.save();
+          c.fillStyle = colors.legend;
+          c.font = '600 10px IBM Plex Mono, monospace';
+          c.textAlign = 'center';
+          c.fillText(Math.round(val).toLocaleString('ru-RU'), pos.x, pos.y - 6);
+          c.restore();
+        });
+      });
+    }
+  };
+}
 
 const fmt = new Intl.NumberFormat('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmt0 = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 });
@@ -837,6 +889,7 @@ function getFiltered(){
 function applyFilters(){
   const rows = getFiltered();
   renderSummary(rows);
+  try{ renderYearSummaryChart(); }catch(e){ console.error('year summary chart failed', e); }
   try{ renderYearlyChart(); }catch(e){ console.error('yearly chart failed', e); }
   try{ renderCompareChart(); }catch(e){ console.error('compare chart failed', e); }
   try{ renderCategoryChart(rows); }catch(e){ console.error('category chart failed', e); }
@@ -896,26 +949,80 @@ function renderYearlyChart(){
   const colors = chartColors();
 
   const canvas = document.getElementById('yearlyChart');
-  canvas.parentElement.style.width = '100%';
+  canvas.parentElement.style.width = Math.max(560, monthNames.length * 3 * 26) + 'px';
   const ctx = canvas.getContext('2d');
   if (yearlyChart) yearlyChart.destroy();
   yearlyChart = new Chart(ctx, {
-    type: 'line',
+    type: 'bar',
     data: {
       labels: monthNames,
       datasets: [
-        { label:'Доходы', data: buckets.map(b=>b.income), borderColor: colors.income, backgroundColor: colors.income+'26', fill:true, tension:0.35, pointRadius:3 },
-        { label:'Расходы', data: buckets.map(b=>b.expense), borderColor: colors.expense, backgroundColor: colors.expense+'26', fill:true, tension:0.35, pointRadius:3 },
-        { label:'Сбережения', data: buckets.map(b=>b.savings), borderColor: colors.savings, backgroundColor: colors.savings+'26', fill:true, tension:0.35, pointRadius:3 }
+        { label:'Доходы', data: buckets.map(b=>b.income), backgroundColor: colors.income },
+        { label:'Расходы', data: buckets.map(b=>b.expense), backgroundColor: colors.expense },
+        { label:'Сбережения', data: buckets.map(b=>b.savings), backgroundColor: colors.savings }
       ]
     },
+    plugins: [makeBarValueLabelsPlugin(colors)],
     options: {
       responsive:true,
       maintainAspectRatio:false,
-      interaction:{ mode:'index', intersect:false },
       scales: {
-        x: { ticks:{ color:colors.tick, font:{ family:'IBM Plex Sans', size:11 } }, grid:{ color:colors.grid } },
-        y: { ticks:{ color:colors.tick, font:{ family:'IBM Plex Mono', size:11 } }, grid:{ color:colors.grid } }
+        x: { ticks:{ color:colors.tick, font:{ family:'IBM Plex Sans', size:11 } }, grid:{ display:false } },
+        y: { beginAtZero:true, ticks:{ color:colors.tick, font:{ family:'IBM Plex Mono', size:11 }, callback:compactAxisNumber }, grid:{ color:colors.grid } }
+      },
+      plugins: {
+        legend: { labels:{ color:colors.legend, font:{ family:'IBM Plex Sans', size:12 } } }
+      }
+    }
+  });
+}
+
+/* ---------- Сведения по годам ---------- */
+document.getElementById('yearSummaryRow').addEventListener('click', e => {
+  const btn = e.target.closest('.chip');
+  if (!btn) return;
+  document.querySelectorAll('#yearSummaryRow .chip').forEach(c => c.classList.remove('active'));
+  btn.classList.add('active');
+  yearSummaryMode = btn.dataset.range;
+  renderYearSummaryChart();
+});
+
+function renderYearSummaryChart(){
+  let years = [...new Set(ROWS.filter(r => activeCategories.has(r.categoryKey)).map(r => r.date.getFullYear()))].sort((a,b) => a-b);
+  if (yearSummaryMode === '5') years = years.slice(-5);
+  const buckets = new Map(years.map(y => [y, {income:0, expense:0, savings:0}]));
+  ROWS.forEach(r => {
+    if (!activeCategories.has(r.categoryKey)) return;
+    const b = buckets.get(r.date.getFullYear());
+    if (!b) return;
+    const savings = isSavingsCategory(r.categoryKey);
+    if (r.income) b.income += r.amount;
+    else if (savings) b.savings += r.amount;
+    else b.expense += r.amount;
+  });
+  const colors = chartColors();
+
+  const canvas = document.getElementById('yearSummaryChart');
+  canvas.parentElement.style.width = Math.max(560, years.length * 3 * 30) + 'px';
+  const ctx = canvas.getContext('2d');
+  if (yearSummaryChart) yearSummaryChart.destroy();
+  yearSummaryChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: years.map(String),
+      datasets: [
+        { label:'Доходы', data: years.map(y=>buckets.get(y).income), backgroundColor: colors.income },
+        { label:'Расходы', data: years.map(y=>buckets.get(y).expense), backgroundColor: colors.expense },
+        { label:'Сбережения', data: years.map(y=>buckets.get(y).savings), backgroundColor: colors.savings }
+      ]
+    },
+    plugins: [makeBarValueLabelsPlugin(colors)],
+    options: {
+      responsive:true,
+      maintainAspectRatio:false,
+      scales: {
+        x: { ticks:{ color:colors.tick, font:{ family:'IBM Plex Sans', size:11 } }, grid:{ display:false } },
+        y: { beginAtZero:true, ticks:{ color:colors.tick, font:{ family:'IBM Plex Mono', size:11 }, callback:compactAxisNumber }, grid:{ color:colors.grid } }
       },
       plugins: {
         legend: { labels:{ color:colors.legend, font:{ family:'IBM Plex Sans', size:12 } } }
@@ -990,38 +1097,17 @@ function renderCompareChart(){
 
   canvas.parentElement.style.width = Math.max(560, categoryKeys.length * months.length * 26) + 'px';
 
-  const barValueLabels = {
-    id:'barValueLabels',
-    afterDatasetsDraw(chart){
-      const c = chart.ctx;
-      chart.data.datasets.forEach((dataset, dsIndex) => {
-        const meta = chart.getDatasetMeta(dsIndex);
-        meta.data.forEach((bar, index) => {
-          const val = dataset.data[index];
-          if (!val) return;
-          const pos = bar.tooltipPosition();
-          c.save();
-          c.fillStyle = colors.legend;
-          c.font = '600 10px IBM Plex Mono, monospace';
-          c.textAlign = 'center';
-          c.fillText(Math.round(val).toLocaleString('ru-RU'), pos.x, pos.y - 6);
-          c.restore();
-        });
-      });
-    }
-  };
-
   if (compareChart) compareChart.destroy();
   compareChart = new Chart(ctx, {
     type: 'bar',
     data: { labels, datasets },
-    plugins: [barValueLabels],
+    plugins: [makeBarValueLabelsPlugin(colors)],
     options: {
       responsive:true,
       maintainAspectRatio:false,
       scales: {
         x: { ticks:{ color:colors.tick, font:{ family:'IBM Plex Sans', size:11 }, maxRotation:60, minRotation:30 }, grid:{ display:false } },
-        y: { ticks:{ color:colors.tick, font:{ family:'IBM Plex Mono', size:11 } }, grid:{ color:colors.grid } }
+        y: { ticks:{ color:colors.tick, font:{ family:'IBM Plex Mono', size:11 }, callback:compactAxisNumber }, grid:{ color:colors.grid } }
       },
       plugins: {
         legend: { labels:{ color:colors.legend, font:{ family:'IBM Plex Sans', size:12 } } }
