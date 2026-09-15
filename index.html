@@ -565,7 +565,7 @@
         </div>
         <div class="chart-scroll">
           <div class="chart-inner">
-            <canvas id="monthlyLineChart" height="126"></canvas>
+            <canvas id="monthlyLineChart" height="189"></canvas>
           </div>
         </div>
       </section>
@@ -636,6 +636,8 @@ const CONFIG = {
   savingsCategories: ['сбережения', 'инвестиции']
 };
 /* ========================================================= */
+
+Chart.defaults.font.family = "'IBM Plex Sans', sans-serif";
 
 document.getElementById('sheetLink').href =
   `https://docs.google.com/spreadsheets/d/${CONFIG.spreadsheetId}/edit`;
@@ -1022,7 +1024,17 @@ function renderMonthlyLineChart(){
         y: { ticks:{ color:colors.tick, font:{ family:'IBM Plex Mono', size:11 }, callback:compactAxisNumber }, grid:{ color:colors.grid } }
       },
       plugins: {
-        legend: { labels:{ color:colors.legend, font:{ family:'IBM Plex Sans', size:12 } } }
+        legend: {
+          labels:{
+            color:colors.legend, font:{ family:'IBM Plex Sans', size:12 },
+            usePointStyle:true, pointStyle:'line'
+          }
+        },
+        tooltip: {
+          enabled: !window.matchMedia('(max-width:860px)').matches,
+          titleFont:{ family:'IBM Plex Sans', size:12 },
+          bodyFont:{ family:'IBM Plex Mono', size:12 }
+        }
       }
     }
   });
