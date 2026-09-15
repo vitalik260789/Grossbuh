@@ -1157,7 +1157,7 @@ function renderCategoryChart(rows){
     plugins: [donutLabelsPlugin, centerTextPlugin],
     options: {
       plugins: {
-        legend: { position:'bottom', labels:{ color:colors.legend, font:{ family:'IBM Plex Sans', size:11 }, boxWidth:12 } }
+        legend: { display:false }
       },
       onHover: (evt, elements) => {
         document.querySelectorAll('#topCatTable tbody tr').forEach(tr => tr.classList.remove('hl'));
@@ -1169,11 +1169,14 @@ function renderCategoryChart(rows){
     }
   });
 
+  const legendRows = top.map(([key, val]) => ({ label: catDisplayMap.get(key) || key, val }));
+  if (restSum > 0) legendRows.push({ label: 'Прочее', val: restSum });
+
   const tbody = document.querySelector('#topCatTable tbody');
   tbody.innerHTML = '';
-  top.forEach(([key, val], i) => {
+  legendRows.forEach(({label, val}, i) => {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td style="border-left:3px solid ${palette[i]};padding-left:8px;">${catDisplayMap.get(key) || key}</td>
+    tr.innerHTML = `<td style="border-left:3px solid ${palette[i]};padding-left:8px;">${label}</td>
                      <td class="amt mono">${money(val)}</td>
                      <td class="amt mono" style="color:var(--muted)">${(val/total*100).toFixed(1)}%</td>`;
     tr.addEventListener('mouseenter', () => {
