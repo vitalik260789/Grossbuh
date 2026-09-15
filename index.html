@@ -325,21 +325,13 @@
 
   /* ---------- month-compare controls ---------- */
   .compare-controls{
-    display:grid;
-    grid-template-columns:220px 1fr;
-    gap:24px;
+    display:flex;
+    flex-direction:column;
+    gap:14px;
     margin-bottom:18px;
   }
-  @media (max-width:700px){
-    .compare-controls{grid-template-columns:1fr;}
-  }
   .month-list{
-    max-height:200px;
-    overflow-y:auto;
-    display:flex;flex-wrap:wrap;align-content:flex-start;gap:6px;
-    border:1px solid var(--line);
-    border-radius:var(--radius);
-    padding:10px;
+    display:flex;flex-wrap:wrap;gap:6px;
   }
   .compare-side{display:flex;flex-direction:column;justify-content:space-between;}
   .compare-hint{font-size:12px;color:var(--muted);margin-top:6px;}
@@ -566,15 +558,13 @@
       <section class="block">
         <h2>Сравнение категорий расходов по месяцам</h2>
         <div class="compare-controls">
-          <div>
-            <div class="month-list" id="monthList"></div>
-          </div>
+          <div class="month-list" id="monthList"></div>
           <div class="compare-side">
             <div class="preset-row" id="topTenRow">
               <button class="chip" data-mode="all">Все категории</button>
               <button class="chip active" data-mode="top10">Только ТОП-10</button>
             </div>
-            <div class="compare-hint">Отметьте месяцы слева — каждый станет отдельным столбцом своего цвета на графике.</div>
+            <div class="compare-hint">Отметьте месяцы выше — каждый станет отдельным столбцом своего цвета на графике.</div>
           </div>
         </div>
         <div class="chart-scroll">
@@ -855,6 +845,7 @@ document.getElementById('yearFilter').addEventListener('change', () => {
   document.querySelectorAll('#monthFilterRow .chip[data-preset]').forEach(b => b.classList.remove('active'));
   page = 0;
   syncSelectedYearFromFilter();
+  buildMonthSelector();
   applyFilters();
 });
 document.getElementById('monthFilterRow').addEventListener('click', e => {
@@ -1121,15 +1112,17 @@ function renderYearSummaryChart(){
 
 /* ---------- Сравнение категорий расходов по месяцам ---------- */
 function buildMonthSelector(){
-  const months = [...new Set(ROWS.map(r => monthKey(r.date)))].sort().reverse();
-  selectedMonths = new Set(months.slice(0,1));
+  const year = selectedYear != null ? selectedYear : new Date().getFullYear();
+  const monthNames = ['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек'];
+  const currentMonthKey = `${year}-${String(new Date().getMonth()+1).padStart(2,'0')}`;
+  selectedMonths = new Set([currentMonthKey]);
   const list = document.getElementById('monthList');
   list.innerHTML = '';
-  months.forEach((k, i) => {
+  monthNames.forEach((name, i) => {
+    const k = `${year}-${String(i+1).padStart(2,'0')}`;
     const btn = document.createElement('button');
     btn.className = 'chip' + (selectedMonths.has(k) ? ' active' : '');
-    btn.textContent = i + 1;
-    btn.title = monthLabel(k);
+    btn.textContent = name;
     btn.addEventListener('click', () => {
       btn.classList.toggle('active');
       if (selectedMonths.has(k)) selectedMonths.delete(k); else selectedMonths.add(k);
