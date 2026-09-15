@@ -174,6 +174,11 @@
     }
     header.top{padding:20px;}
     main.dashboard{padding:20px;}
+    #categoriesFilterGroup.mobile-relocated{
+      border-top:1px solid var(--line);
+      padding-top:20px;
+      margin-bottom:32px;
+    }
   }
 
   /* ---------- filter groups ---------- */
@@ -473,7 +478,7 @@
       </div>
     </div>
 
-    <div class="filter-group">
+    <div class="filter-group" id="categoriesFilterGroup">
       <h2>Категории</h2>
       <input class="cat-search" id="catSearch" placeholder="поиск категории…">
       <div class="cat-actions">
@@ -484,7 +489,7 @@
       <div class="compare-hint">Категории здесь влияют также на графики «Динамика» и «Сравнение по месяцам» ниже.</div>
     </div>
 
-    <div class="filter-group">
+    <div class="filter-group" id="searchFilterGroup">
       <h2>Поиск по заметке</h2>
       <input class="free-search" id="freeSearch" placeholder="например: Рено">
     </div>
@@ -574,7 +579,7 @@
         </div>
       </section>
 
-      <section class="block">
+      <section class="block" id="txSection">
         <h2 class="collapsible" id="txHeader">Операции <span class="count mono" id="txHeaderCount"></span><span class="caret" id="txCaret">▸</span></h2>
         <div id="txBodyWrap" style="display:none;">
           <table class="tx">
@@ -768,6 +773,7 @@ async function loadData(){
   buildMonthSelector();
   document.getElementById('loadingState').style.display = 'none';
   document.getElementById('content').style.display = 'block';
+  layoutCategoriesForViewport();
   applyFilters();
 }
 
@@ -1241,6 +1247,26 @@ document.querySelectorAll('table.tx thead th[data-sort]').forEach(th => {
     applyFilters();
   });
 });
+
+/* ---------- перенос «Категорий» на мобильных ---------- */
+const mobileLayoutQuery = window.matchMedia('(max-width:860px)');
+function layoutCategoriesForViewport(){
+  const catGroup = document.getElementById('categoriesFilterGroup');
+  const txSection = document.getElementById('txSection');
+  if (mobileLayoutQuery.matches){
+    if (catGroup.nextElementSibling !== txSection){
+      txSection.parentElement.insertBefore(catGroup, txSection);
+    }
+    catGroup.classList.add('mobile-relocated');
+  } else {
+    const searchGroup = document.getElementById('searchFilterGroup');
+    if (catGroup.nextElementSibling !== searchGroup){
+      searchGroup.parentElement.insertBefore(catGroup, searchGroup);
+    }
+    catGroup.classList.remove('mobile-relocated');
+  }
+}
+mobileLayoutQuery.addEventListener('change', layoutCategoriesForViewport);
 
 loadData();
 </script>
