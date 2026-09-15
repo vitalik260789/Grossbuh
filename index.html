@@ -336,17 +336,11 @@
   .month-list{
     max-height:200px;
     overflow-y:auto;
-    display:flex;flex-direction:column;gap:5px;
+    display:flex;flex-wrap:wrap;align-content:flex-start;gap:6px;
     border:1px solid var(--line);
     border-radius:var(--radius);
     padding:10px;
   }
-  .month-list label{
-    display:flex;align-items:center;gap:8px;
-    font-size:12.5px;color:var(--text-dim);
-    cursor:pointer;
-  }
-  .month-list input{accent-color:var(--accent);}
   .compare-side{display:flex;flex-direction:column;justify-content:space-between;}
   .compare-hint{font-size:12px;color:var(--muted);margin-top:6px;}
 
@@ -1131,19 +1125,17 @@ function buildMonthSelector(){
   selectedMonths = new Set(months.slice(0,1));
   const list = document.getElementById('monthList');
   list.innerHTML = '';
-  months.forEach(k => {
-    const label = document.createElement('label');
-    const cb = document.createElement('input');
-    cb.type = 'checkbox';
-    cb.checked = selectedMonths.has(k);
-    cb.value = k;
-    cb.addEventListener('change', () => {
-      if (cb.checked) selectedMonths.add(k); else selectedMonths.delete(k);
+  months.forEach((k, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'chip' + (selectedMonths.has(k) ? ' active' : '');
+    btn.textContent = i + 1;
+    btn.title = monthLabel(k);
+    btn.addEventListener('click', () => {
+      btn.classList.toggle('active');
+      if (selectedMonths.has(k)) selectedMonths.delete(k); else selectedMonths.add(k);
       renderCompareChart();
     });
-    label.appendChild(cb);
-    label.appendChild(document.createTextNode(monthLabel(k)));
-    list.appendChild(label);
+    list.appendChild(btn);
   });
 }
 document.getElementById('topTenRow').addEventListener('click', e => {
@@ -1195,7 +1187,7 @@ function renderCompareChart(){
   compareChart = new Chart(ctx, {
     type: 'bar',
     data: { labels, datasets },
-    plugins: [makeBarValueLabelsPlugin(colors)],
+    plugins: [makeBarValueLabelsPlugin(colors, {compactOnMobile:true})],
     options: {
       responsive:true,
       maintainAspectRatio:false,
