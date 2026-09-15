@@ -502,7 +502,7 @@
       <section class="block">
         <div class="charts-two">
           <div>
-            <h2>Категории расходов</h2>
+            <h2 id="categoryChartTitle">Категории расходов</h2>
             <div class="donut-wrap">
               <canvas id="categoryChart"></canvas>
             </div>
@@ -1197,7 +1197,10 @@ function renderCompareChart(){
 
 /* ---------- Категории расходов (донат) ---------- */
 function renderCategoryChart(rows){
-  const expenseRows = rows.filter(r => !r.income);
+  const type = document.querySelector('input[name=type]:checked').value;
+  const isIncomeMode = type === 'income';
+  document.getElementById('categoryChartTitle').textContent = isIncomeMode ? 'Категории доходов' : 'Категории расходов';
+  const expenseRows = rows.filter(r => r.income === isIncomeMode);
   const map = new Map();
   expenseRows.forEach(r => map.set(r.categoryKey, (map.get(r.categoryKey)||0) + r.amount));
   const sorted = [...map.entries()].sort((a,b) => b[1]-a[1]);
@@ -1245,7 +1248,7 @@ function renderCategoryChart(rows){
       ctx.textBaseline = 'middle';
       ctx.fillStyle = colors.centerMuted;
       ctx.font = '11px IBM Plex Sans, sans-serif';
-      ctx.fillText('всего расходов', cx, cy-10);
+      ctx.fillText(isIncomeMode ? 'всего доходов' : 'всего расходов', cx, cy-10);
       ctx.fillStyle = colors.centerText;
       ctx.font = '600 15px IBM Plex Mono, monospace';
       ctx.fillText(money0(total), cx, cy+10);
