@@ -674,7 +674,7 @@ function makeBarValueLabelsPlugin(colors, opts){
     id: 'barValueLabels',
     afterDatasetsDraw(chart){
       const c = chart.ctx;
-      const compact = opts.compactOnMobile && window.matchMedia('(max-width:860px)').matches;
+      const compact = !!opts.compact;
       chart.data.datasets.forEach((dataset, dsIndex) => {
         const meta = chart.getDatasetMeta(dsIndex);
         meta.data.forEach((bar, index) => {
@@ -986,7 +986,7 @@ function renderYearlyChart(){
         { label:'Сбережения', data: buckets.map(b=>b.savings), backgroundColor: colors.savings }
       ]
     },
-    plugins: [makeBarValueLabelsPlugin(colors, {compactOnMobile:true})],
+    plugins: [makeBarValueLabelsPlugin(colors, {compact:true})],
     options: {
       responsive:true,
       maintainAspectRatio:false,
@@ -1095,7 +1095,7 @@ function renderYearSummaryChart(){
         { label:'Сбережения', data: years.map(y=>buckets.get(y).savings), backgroundColor: colors.savings }
       ]
     },
-    plugins: [makeBarValueLabelsPlugin(colors, {compactOnMobile:true})],
+    plugins: [makeBarValueLabelsPlugin(colors, {compact:true})],
     options: {
       responsive:true,
       maintainAspectRatio:false,
@@ -1180,7 +1180,7 @@ function renderCompareChart(){
   compareChart = new Chart(ctx, {
     type: 'bar',
     data: { labels, datasets },
-    plugins: [makeBarValueLabelsPlugin(colors, {compactOnMobile:true})],
+    plugins: [makeBarValueLabelsPlugin(colors, {compact:true})],
     options: {
       responsive:true,
       maintainAspectRatio:false,
