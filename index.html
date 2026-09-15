@@ -559,6 +559,18 @@
       </section>
 
       <section class="block">
+        <div class="chart-header-row">
+          <h2>Динамика по месяцам</h2>
+          <span class="mono" id="monthlyLineChartYearLabel" style="color:var(--muted);font-size:13px;"></span>
+        </div>
+        <div class="chart-scroll">
+          <div class="chart-inner">
+            <canvas id="monthlyLineChart" height="126"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <section class="block">
         <h2>Сравнение категорий расходов по месяцам</h2>
         <div class="compare-controls">
           <div>
@@ -662,7 +674,7 @@ let activeCategories = new Set();
 let sortState = { key: 'date', dir: 'desc' };
 let page = 0;
 const PAGE_SIZE = 25;
-let categoryChart, yearlyChart, compareChart, yearSummaryChart;
+let categoryChart, yearlyChart, compareChart, yearSummaryChart, monthlyLineChart;
 let selectedYear = null;
 let selectedMonths = new Set();
 let topTenMode = true;
@@ -887,6 +899,7 @@ function applyFilters(){
   renderSummary(rows);
   try{ renderYearSummaryChart(); }catch(e){ console.error('year summary chart failed', e); }
   try{ renderYearlyChart(); }catch(e){ console.error('yearly chart failed', e); }
+  try{ renderMonthlyLineChart(); }catch(e){ console.error('monthly line chart failed', e); }
   try{ renderCompareChart(); }catch(e){ console.error('compare chart failed', e); }
   try{ renderCategoryChart(rows); }catch(e){ console.error('category chart failed', e); }
   renderTable(rows);
@@ -957,6 +970,51 @@ function renderYearlyChart(){
       scales: {
         x: { ticks:{ color:colors.tick, font:{ family:'IBM Plex Sans', size:11 } }, grid:{ display:false } },
         y: { beginAtZero:true, ticks:{ color:colors.tick, font:{ family:'IBM Plex Mono', size:11 }, callback:compactAxisNumber }, grid:{ color:colors.grid } }
+      },
+      plugins: {
+        legend: { labels:{ color:colors.legend, font:{ family:'IBM Plex Sans', size:12 } } }
+      }
+    }
+  });
+}
+
+/* ---------- Динамика по месяцам (та же выборка, вид линией) ---------- */
+function renderMonthlyLineChart(){
+  if (selectedYear == null) return;
+  document.getElementById('monthlyLineChartYearLabel').textContent = selectedYear;
+  const rows = ROWS.filter(r => activeCategories.has(r.categoryKey) && r.date.getFullYear() === selectedYear);
+  const buckets = Array.from({length:12}, () => ({income:0, expense:0, savings:0}));
+  rows.forEach(r => {
+    const m = r.date.getMonth();
+    const savings = isSavingsCategory(r.categoryKey);
+    if (r.income) buckets[m].income += r.amount;
+    else if (savings) buckets[m].savings += r.amount;
+    else buckets[m].expense += r.amount;
+  });
+  const monthNames = ['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек'];
+  const colors = chartColors();
+
+  const canvas = document.getElementById('monthlyLineChart');
+  canvas.parentElement.style.width = '100%';
+  const ctx = canvas.getContext('2d');
+  if (monthlyLineChart) monthlyLineChart.destroy();
+  monthlyLineChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: monthNames,
+      datasets: [
+        { label:'Доходы', data: buckets.map(b=>b.income), borderColor: colors.income, backgroundColor: colors.income+'26', fill:true, tension:0.35, pointRadius:3 },
+        { label:'Расходы', data: buckets.map(b=>b.expense), borderColor: colors.expense, backgroundColor: colors.expense+'26', fill:true, tension:0.35, pointRadius:3 },
+        { label:'Сбережения', data: buckets.map(b=>b.savings), borderColor: colors.savings, backgroundColor: colors.savings+'26', fill:true, tension:0.35, pointRadius:3 }
+      ]
+    },
+    options: {
+      responsive:true,
+      maintainAspectRatio:false,
+      interaction:{ mode:'index', intersect:false },
+      scales: {
+        x: { ticks:{ color:colors.tick, font:{ family:'IBM Plex Sans', size:11 } }, grid:{ color:colors.grid } },
+        y: { ticks:{ color:colors.tick, font:{ family:'IBM Plex Mono', size:11 }, callback:compactAxisNumber }, grid:{ color:colors.grid } }
       },
       plugins: {
         legend: { labels:{ color:colors.legend, font:{ family:'IBM Plex Sans', size:12 } } }
