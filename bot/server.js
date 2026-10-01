@@ -23,6 +23,11 @@ const TYPES = [
   { key: 'savings', label: 'Сбережения', sheetType: 'расход' }
 ];
 
+/* ---------- категории дохода ---------- */
+const INCOME_CATEGORIES = [
+  ['Зарплата', '💼'], ['Инвестиции', '📈'], ['Левый доход', '🤑']
+];
+
 /* ---------- категории (правьте список свободно) ---------- */
 const CATEGORIES = [
   ['Еда', '🍞'], ['Кафе', '☕'], ['Столовка', '🍽'],
@@ -76,10 +81,11 @@ const sessions = new Map();
 function typeKeyboard() {
   return { inline_keyboard: [TYPES.map(t => ({ text: t.label, callback_data: `type:${t.key}` }))] };
 }
-function categoryKeyboard() {
+function categoryKeyboard(typeKey) {
+  const list = typeKey === 'income' ? INCOME_CATEGORIES : CATEGORIES;
   const rows = [];
-  for (let i = 0; i < CATEGORIES.length; i += 3) {
-    rows.push(CATEGORIES.slice(i, i + 3).map(([name, emoji]) =>
+  for (let i = 0; i < list.length; i += 3) {
+    rows.push(list.slice(i, i + 3).map(([name, emoji]) =>
       ({ text: `${emoji} ${name}`, callback_data: `cat:${name}` })));
   }
   return { inline_keyboard: rows };
@@ -105,7 +111,7 @@ bot.on('message', (msg) => {
     const note = match[3] ? match[3].trim() : '';
     sessions.set(chatId, { step: 'category', type, amount, note });
     bot.sendMessage(chatId, `${type.label}: ${amount.toFixed(2)} ${note ? '— ' + note + ' ' : ''}— выбери категорию:`,
-      { reply_markup: categoryKeyboard() });
+      { reply_markup: categoryKeyboard(type.key) });
     return;
   }
 
@@ -121,7 +127,7 @@ bot.on('message', (msg) => {
   bot.sendMessage(
     chatId,
     `${session.type.label}: ${session.amount.toFixed(2)} ${session.note ? '— ' + session.note + ' ' : ''}— выбери категорию:`,
-    { reply_markup: categoryKeyboard() }
+    { reply_markup: categoryKeyboard(session.type.key) }
   );
 });
 
