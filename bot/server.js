@@ -28,6 +28,11 @@ const INCOME_CATEGORIES = [
   ['Зарплата', '💼'], ['Инвестиции', '📈'], ['Левый доход', '🤑']
 ];
 
+/* ---------- категории сбережений ---------- */
+const SAVINGS_CATEGORIES = [
+  ['Сбережения', '💰']
+];
+
 /* ---------- категории (правьте список свободно) ---------- */
 const CATEGORIES = [
   ['Еда', '🍞'], ['Кафе', '☕'], ['Столовка', '🍽'],
@@ -39,8 +44,7 @@ const CATEGORIES = [
   ['Детское', '🧸'], ['Подписки', '📋'], ['Одежда', '👕'],
   ['Поездки в РБ', '🇧🇾'], ['Минск квартира', '🏢'], ['СТС', '📺'],
   ['Бровки 36', '💅'], ['Айти', '💻'], ['Аптека', '💊'],
-  ['В дар', '☀️'], ['Здоровье', '❤️‍🩹'], ['Кофе', '☕'],
-  ['Сбережения', '💰']
+  ['В дар', '☀️'], ['Здоровье', '❤️‍🩹'], ['Кофе', '☕']
 ];
 
 const WEBHOOK_PATH = `/webhook/${TOKEN}`;
@@ -82,7 +86,9 @@ function typeKeyboard() {
   return { inline_keyboard: [TYPES.map(t => ({ text: t.label, callback_data: `type:${t.key}` }))] };
 }
 function categoryKeyboard(typeKey) {
-  const list = typeKey === 'income' ? INCOME_CATEGORIES : CATEGORIES;
+  const list = typeKey === 'income' ? INCOME_CATEGORIES
+    : typeKey === 'savings' ? SAVINGS_CATEGORIES
+    : CATEGORIES;
   const rows = [];
   for (let i = 0; i < list.length; i += 3) {
     rows.push(list.slice(i, i + 3).map(([name, emoji]) =>
