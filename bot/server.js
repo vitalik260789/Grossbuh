@@ -9,6 +9,11 @@ const PUBLIC_URL = process.env.PUBLIC_URL; // напр. https://grossbuh-bot.onr
 const APPS_SCRIPT_URL = process.env.APPS_SCRIPT_URL;   // URL веб-приложения Apps Script
 const APPS_SCRIPT_SECRET = process.env.APPS_SCRIPT_SECRET; // общий секрет, тот же, что в Code.gs
 
+// Таблица «Глеб — взносы» (отдельный Apps Script, привязанный к ней)
+const GLEB_SCRIPT_URL = process.env.GLEB_SCRIPT_URL;
+const GLEB_SCRIPT_SECRET = process.env.GLEB_SCRIPT_SECRET;
+const GLEB_CATEGORY = 'Глеб инвест';
+
 if (!TOKEN) {
   console.error('TELEGRAM_BOT_TOKEN не задан в переменных окружения');
   process.exit(1);
@@ -20,7 +25,19 @@ if (!TOKEN) {
 const TYPES = [
   { key: 'expense', label: 'Расход', sheetType: 'расход' },
   { key: 'income',  label: 'Доход',  sheetType: 'доход' },
-  { key: 'savings', label: 'Сбережения', sheetType: 'расход' }
+  { key: 'savings', label: 'Сбережения', sheetType: 'расход' },
+  { key: 'gleb', label: 'Глеб 📈', sheetType: 'расход' }
+];
+
+/* ---------- активы Глеба ---------- */
+// coingecko — id для подтягивания цены, если цену не указали
+const GLEB_ASSETS = [
+  { key: 'BTC', label: '₿ BTC', coingecko: 'bitcoin' },
+  { key: 'ETH', label: 'Ξ ETH', coingecko: 'ethereum' },
+  { key: 'TON', label: '💎 TON', coingecko: 'the-open-network' },
+  { key: 'TWT', label: '🛡 TWT', coingecko: 'trust-wallet-token' },
+  { key: 'DEP', label: '🏦 Депозит' },
+  { key: 'BAL', label: '🔄 Баланс депозита' }
 ];
 
 /* ---------- категории дохода ---------- */
@@ -78,12 +95,72 @@ async function appendRow({ amount, category, note, sheetType }) {
   if (!json.ok) throw new Error(json.error || 'apps script вернул ошибку');
 }
 
+/* ---------- запись в таблицу «Глеб — взносы» ---------- */
+async function appendGlebRow({ rub, asset, price, units, note }) {
+  if (!GLEB_SCRIPT_URL || !GLEB_SCRIPT_SECRET) {
+    throw new Error('GLEB_SCRIPT_URL / GLEB_SCRIPT_SECRET не заданы в переменных окружения');
+  }
+  const url = new URL(GLEB_SCRIPT_URL);
+  url.searchParams.set('secret', GLEB_SCRIPT_SECRET);
+  url.searchParams.set('rub', String(rub));
+  url.searchParams.set('asset', asset);
+  if (price != null) url.searchParams.set('price', String(price));
+  if (units != null) url.searchParams.set('units', String(units));
+  url.searchParams.set('note', note || '');
+  const res = await fetch(url.toString());
+  const json = await res.json();
+  if (!json.ok) throw new Error(json.error || 'apps script (Глеб) вернул ошибку');
+}
+
+async function fetchUsdPrice(coingeckoId) {
+  try {
+    const r = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${coingeckoId}&vs_currencies=usd`);
+    const j = await r.json();
+    return j[coingeckoId] && j[coingeckoId].usd ? j[coingeckoId].usd : null;
+  } catch (e) { return null; }
+}
+
+const fmtNum = (v, d = 8) => Number(v).toLocaleString('ru-RU', { maximumFractionDigits: d });
+function glebSummary(s) {
+  const a = GLEB_ASSETS.find(x => x.key === s.glebAsset);
+  if (s.glebAsset === 'BAL') return `🔄 Баланс депозита Глеба: ${fmtNum(s.amount, 2)} ₽`;
+  let t = `📈 Глеб: ${fmtNum(s.amount, 2)} ₽ → ${a ? a.label : s.glebAsset}`;
+  if (s.units != null) t += `\nКуплено: ${fmtNum(s.units)} ${s.glebAsset}`;
+  if (s.price != null) t += ` по $${fmtNum(s.price, 4)}`;
+  if (s.note) t += `\nЗаметка: ${s.note}`;
+  return t;
+}
+function confirmKeyboard() {
+  return { inline_keyboard: [[
+    { text: '✅ Сохранить', callback_data: 'save' },
+    { text: '✖ Отмена', callback_data: 'cancel' }
+  ]] };
+}
+function askGlebAsset(chatId, session, messageId) {
+  session.step = 'gleb_asset';
+  session.type = TYPES.find(t => t.key === 'gleb');
+  session.category = GLEB_CATEGORY;
+  sessions.set(chatId, session);
+  const text = `Глеб: ${fmtNum(session.amount, 2)} ₽ — куда?`;
+  if (messageId) return bot.editMessageText(text, { chat_id: chatId, message_id: messageId, reply_markup: glebAssetKeyboard() });
+  return bot.sendMessage(chatId, text, { reply_markup: glebAssetKeyboard() });
+}
+
 /* ---------- сессия в памяти (на чат) ---------- */
 // step: 'type' | 'amount' | 'category' | 'confirm'
 const sessions = new Map();
 
 function typeKeyboard() {
-  return { inline_keyboard: [TYPES.map(t => ({ text: t.label, callback_data: `type:${t.key}` }))] };
+  const btn = t => ({ text: t.label, callback_data: `type:${t.key}` });
+  return { inline_keyboard: [TYPES.slice(0, 3).map(btn), TYPES.slice(3).map(btn)] };
+}
+function glebAssetKeyboard() {
+  const rows = [];
+  for (let i = 0; i < GLEB_ASSETS.length; i += 2) {
+    rows.push(GLEB_ASSETS.slice(i, i + 2).map(a => ({ text: a.label, callback_data: `gasset:${a.key}` })));
+  }
+  rows.push([{ text: '✖ Отмена', callback_data: 'cancel' }]);
+  return { inline_keyboard: rows };
 }
 function categoryKeyboard(typeKey) {
   const list = typeKey === 'income' ? INCOME_CATEGORIES
@@ -103,10 +180,50 @@ function startEntry(chatId) {
 
 bot.onText(/\/start/, (msg) => startEntry(msg.chat.id));
 
-bot.on('message', (msg) => {
+bot.on('message', async (msg) => {
   if (!msg.text || msg.text.startsWith('/')) return;
   const chatId = msg.chat.id;
   const session = sessions.get(chatId);
+
+  // Глеб → Гроссбух: сумма в валюте Гроссбуха
+  if (session && session.step === 'gb_amount') {
+    const m = msg.text.trim().match(/^(\d+(?:[.,]\d+)?)\s*$/);
+    if (!m) { bot.sendMessage(chatId, 'Пришли число, например 37.5, или нажми «Не надо»'); return; }
+    try {
+      await appendRow({ amount: parseFloat(m[1].replace(',', '.')), category: GLEB_CATEGORY,
+        note: [session.glebAsset === 'DEP' ? 'депозит' : session.glebAsset, session.note].filter(Boolean).join(' '),
+        sheetType: 'расход' });
+      await bot.sendMessage(chatId, 'Записано ✓ (Гроссбух)');
+    } catch (e) { console.error(e); await bot.sendMessage(chatId, '⚠️ Гроссбух: ' + e.message); }
+    startEntry(chatId);
+    return;
+  }
+  // Гроссбух → Глеб: сумма в рублях
+  if (session && session.step === 'gleb_rub') {
+    const m = msg.text.trim().match(/^(\d+(?:[.,]\d+)?)\s*$/);
+    if (!m) { bot.sendMessage(chatId, 'Пришли сумму в ₽, например 5000, или нажми «Не надо»'); return; }
+    askGlebAsset(chatId, { amount: parseFloat(m[1].replace(',', '.')), note: session.note, fromGrossbuh: true });
+    return;
+  }
+
+  // Глеб: ввод количества монет (и, по желанию, цены)
+  if (session && session.step === 'gleb_units') {
+    const m = msg.text.trim().replace(/\$/g, '').match(/^(\d+(?:[.,]\d+)?)(?:\s+(\d+(?:[.,]\d+)?))?\s*$/);
+    if (!m) {
+      bot.sendMessage(chatId, 'Пришлите количество монет, например: 0.0013\nМожно сразу с ценой в $: 0.0013 85000');
+      return;
+    }
+    session.units = parseFloat(m[1].replace(',', '.'));
+    session.price = m[2] ? parseFloat(m[2].replace(',', '.')) : null;
+    if (session.price == null) {
+      const a = GLEB_ASSETS.find(x => x.key === session.glebAsset);
+      if (a && a.coingecko) session.price = await fetchUsdPrice(a.coingecko);
+    }
+    session.step = 'confirm';
+    sessions.set(chatId, session);
+    bot.sendMessage(chatId, glebSummary(session) + '\nЗаписать?', { reply_markup: confirmKeyboard() });
+    return;
+  }
 
   if (!session || session.step !== 'amount') {
     // если пишут сумму без /start — считаем это обычным расходом
@@ -128,6 +245,7 @@ bot.on('message', (msg) => {
   }
   session.amount = parseFloat(match[1].replace(',', '.'));
   session.note = match[3] ? match[3].trim() : '';
+  if (session.type && session.type.key === 'gleb') { askGlebAsset(chatId, session); return; }
   session.step = 'category';
   sessions.set(chatId, session);
   bot.sendMessage(
@@ -145,7 +263,9 @@ bot.on('callback_query', async (query) => {
     const key = data.slice(5);
     const type = TYPES.find(t => t.key === key);
     sessions.set(chatId, { step: 'amount', type });
-    await bot.editMessageText(`${type.label}. Теперь введи сумму (можно с заметкой через пробел):`, {
+    await bot.editMessageText(key === 'gleb'
+      ? 'Глеб 📈. Введи сумму взноса в ₽ (можно с заметкой через пробел):'
+      : `${type.label}. Теперь введи сумму (можно с заметкой через пробел):`, {
       chat_id: chatId, message_id: query.message.message_id
     });
     bot.answerCallbackQuery(query.id);
@@ -177,10 +297,60 @@ bot.on('callback_query', async (query) => {
     return;
   }
 
+  if (data.startsWith('gasset:')) {
+    const session = sessions.get(chatId);
+    if (!session || session.step !== 'gleb_asset') {
+      bot.answerCallbackQuery(query.id, { text: 'Сессия устарела, нажмите /start' });
+      return;
+    }
+    const asset = data.slice(7);
+    session.glebAsset = asset;
+    session.units = null; session.price = null;
+    bot.answerCallbackQuery(query.id);
+    if (asset === 'DEP' || asset === 'BAL') {
+      session.step = 'confirm';
+      sessions.set(chatId, session);
+      await bot.editMessageText(glebSummary(session) + '\nЗаписать?', {
+        chat_id: chatId, message_id: query.message.message_id, reply_markup: confirmKeyboard()
+      });
+      return;
+    }
+    session.step = 'gleb_units';
+    sessions.set(chatId, session);
+    await bot.editMessageText(
+      `Глеб: ${fmtNum(session.amount, 2)} ₽ → ${asset}.\nСколько монет куплено? Например: 0.0013\nМожно сразу с ценой в $: 0.0013 85000 (без цены подставлю текущую)`,
+      { chat_id: chatId, message_id: query.message.message_id }
+    );
+    return;
+  }
+
   if (data === 'save') {
     const session = sessions.get(chatId);
     if (!session || !session.category) {
       bot.answerCallbackQuery(query.id, { text: 'Нечего сохранять' });
+      return;
+    }
+    if (session.glebAsset) {
+      try {
+        await appendGlebRow({ rub: session.amount, asset: session.glebAsset, price: session.price, units: session.units, note: session.note });
+      } catch (e) {
+        console.error(e);
+        bot.answerCallbackQuery(query.id, { text: 'Ошибка записи в таблицу Глеба' });
+        await bot.editMessageText('⚠️ Не записано в «Глеб — взносы»: ' + e.message, { chat_id: chatId, message_id: query.message.message_id });
+        return;
+      }
+      bot.answerCallbackQuery(query.id);
+      // баланс депозита — не расход; взнос, начатый из Гроссбуха, там уже записан
+      if (session.glebAsset === 'BAL' || session.fromGrossbuh) {
+        await bot.editMessageText('Записано ✓ («Глеб — взносы»)', { chat_id: chatId, message_id: query.message.message_id });
+        startEntry(chatId);
+        return;
+      }
+      sessions.set(chatId, { step: 'gb_amount', glebAsset: session.glebAsset, note: session.note });
+      await bot.editMessageText(
+        'Записано ✓ («Глеб — взносы»)\nЗаписать и в Гроссбух как расход «' + GLEB_CATEGORY + '»? Пришли сумму в валюте Гроссбуха:',
+        { chat_id: chatId, message_id: query.message.message_id, reply_markup: { inline_keyboard: [[{ text: 'Не надо', callback_data: 'skip' }]] } }
+      );
       return;
     }
     try {
@@ -192,11 +362,24 @@ bot.on('callback_query', async (query) => {
       });
       await bot.editMessageText('Записано ✓', { chat_id: chatId, message_id: query.message.message_id });
       bot.answerCallbackQuery(query.id);
+      if (session.category === GLEB_CATEGORY) {
+        sessions.set(chatId, { step: 'gleb_rub', note: session.note });
+        bot.sendMessage(chatId, 'Добавить и в фонд Глеба? Пришли сумму в ₽:',
+          { reply_markup: { inline_keyboard: [[{ text: 'Не надо', callback_data: 'skip' }]] } });
+        return;
+      }
       startEntry(chatId); // сразу готовы к следующей записи
     } catch (e) {
       console.error(e);
       bot.answerCallbackQuery(query.id, { text: 'Ошибка записи, попробуйте ещё раз' });
     }
+    return;
+  }
+
+  if (data === 'skip') {
+    await bot.editMessageText(query.message.text || 'Ок', { chat_id: chatId, message_id: query.message.message_id });
+    bot.answerCallbackQuery(query.id);
+    startEntry(chatId);
     return;
   }
 
