@@ -185,10 +185,10 @@ bot.on('message', async (msg) => {
   const chatId = msg.chat.id;
   const session = sessions.get(chatId);
 
-  // Глеб → Гроссбух: сумма в валюте Гроссбуха
+  // Глеб → Гроссбух: сумма в белорусских рублях
   if (session && session.step === 'gb_amount') {
     const m = msg.text.trim().match(/^(\d+(?:[.,]\d+)?)\s*$/);
-    if (!m) { bot.sendMessage(chatId, 'Пришли число, например 37.5, или нажми «Не надо»'); return; }
+    if (!m) { bot.sendMessage(chatId, 'Внеси сумму в белорусских рублях, например 37.5, или нажми «Не надо»'); return; }
     try {
       await appendRow({ amount: parseFloat(m[1].replace(',', '.')), category: GLEB_CATEGORY,
         note: [session.glebAsset === 'DEP' ? 'депозит' : session.glebAsset, session.note].filter(Boolean).join(' '),
@@ -348,7 +348,7 @@ bot.on('callback_query', async (query) => {
       }
       sessions.set(chatId, { step: 'gb_amount', glebAsset: session.glebAsset, note: session.note });
       await bot.editMessageText(
-        'Записано ✓ («Глеб — взносы»)\nЗаписать и в Гроссбух как расход «' + GLEB_CATEGORY + '»? Пришли сумму в валюте Гроссбуха:',
+        'Записано ✓ («Глеб — взносы»)\nЗаписать и в Гроссбух как расход «' + GLEB_CATEGORY + '»? Внеси сумму в белорусских рублях:',
         { chat_id: chatId, message_id: query.message.message_id, reply_markup: { inline_keyboard: [[{ text: 'Не надо', callback_data: 'skip' }]] } }
       );
       return;
