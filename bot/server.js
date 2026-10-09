@@ -37,7 +37,8 @@ const GLEB_ASSETS = [
   { key: 'TON', label: '💎 TON', coingecko: 'the-open-network' },
   { key: 'TWT', label: '🛡 TWT', coingecko: 'trust-wallet-token' },
   { key: 'DEP', label: '🏦 Депозит' },
-  { key: 'BAL', label: '🔄 Баланс депозита' }
+  { key: 'BAL', label: '🔄 Баланс депозита' },
+  { key: 'OTHER', label: '➕ Другая монета' }
 ];
 
 /* ---------- категории дохода ---------- */
@@ -117,6 +118,17 @@ async function fetchUsdPrice(coingeckoId) {
     const r = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${coingeckoId}&vs_currencies=usd`);
     const j = await r.json();
     return j[coingeckoId] && j[coingeckoId].usd ? j[coingeckoId].usd : null;
+  } catch (e) { return null; }
+}
+
+// поиск монеты по тикеру в CoinGecko: берём совпадение символа с лучшим рейтингом
+async function findCoin(ticker) {
+  try {
+    const r = await fetch('https://api.coingecko.com/api/v3/search?query=' + encodeURIComponent(ticker));
+    const j = await r.json();
+    const c = (j.coins || []).filter(c => c.symbol.toUpperCase() === ticker)
+      .sort((a, b) => (a.market_cap_rank || 1e9) - (b.market_cap_rank || 1e9))[0];
+    return c ? { id: c.id, name: c.name } : null;
   } catch (e) { return null; }
 }
 
@@ -206,6 +218,20 @@ bot.on('message', async (msg) => {
     return;
   }
 
+  // Глеб: тикер другой монеты
+  if (session && session.step === 'gleb_ticker') {
+    const t = msg.text.trim().toUpperCase();
+    if (!/^[A-Z0-9]{2,10}$/.test(t)) { bot.sendMessage(chatId, 'Пришли тикер латиницей, например SOL или DOGE'); return; }
+    const coin = await findCoin(t);
+    session.glebAsset = t;
+    session.coingecko = coin ? coin.id : null;
+    session.step = 'gleb_units';
+    sessions.set(chatId, session);
+    bot.sendMessage(chatId, (coin ? `Нашёл: ${coin.name} (${t}).` : `Не нашёл ${t} в CoinGecko — цену укажи сам.`) +
+      `\nСколько монет куплено? Например: 0.5\nМожно сразу с ценой в $: 0.5 150` + (coin ? ' (без цены подставлю текущую)' : ''));
+    return;
+  }
+
   // Глеб: ввод количества монет (и, по желанию, цены)
   if (session && session.step === 'gleb_units') {
     const m = msg.text.trim().replace(/\$/g, '').match(/^(\d+(?:[.,]\d+)?)(?:\s+(\d+(?:[.,]\d+)?))?\s*$/);
@@ -217,7 +243,8 @@ bot.on('message', async (msg) => {
     session.price = m[2] ? parseFloat(m[2].replace(',', '.')) : null;
     if (session.price == null) {
       const a = GLEB_ASSETS.find(x => x.key === session.glebAsset);
-      if (a && a.coingecko) session.price = await fetchUsdPrice(a.coingecko);
+      const cgId = (a && a.coingecko) || session.coingecko;
+      if (cgId) session.price = await fetchUsdPrice(cgId);
     }
     session.step = 'confirm';
     sessions.set(chatId, session);
@@ -304,9 +331,17 @@ bot.on('callback_query', async (query) => {
       return;
     }
     const asset = data.slice(7);
-    session.glebAsset = asset;
-    session.units = null; session.price = null;
+    session.units = null; session.price = null; session.coingecko = null;
     bot.answerCallbackQuery(query.id);
+    if (asset === 'OTHER') {
+      session.step = 'gleb_ticker';
+      sessions.set(chatId, session);
+      await bot.editMessageText(`Фонд Глеба: ${fmtNum(session.amount, 2)} ₽ → другая монета.\nПришли тикер латиницей, например SOL`, {
+        chat_id: chatId, message_id: query.message.message_id
+      });
+      return;
+    }
+    session.glebAsset = asset;
     if (asset === 'DEP' || asset === 'BAL') {
       session.step = 'confirm';
       sessions.set(chatId, session);
