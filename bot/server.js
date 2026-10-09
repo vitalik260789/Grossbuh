@@ -26,7 +26,7 @@ const TYPES = [
   { key: 'expense', label: 'Расход', sheetType: 'расход' },
   { key: 'income',  label: 'Доход',  sheetType: 'доход' },
   { key: 'savings', label: 'Сбережения', sheetType: 'расход' },
-  { key: 'gleb', label: 'Глеб 📈', sheetType: 'расход' }
+  { key: 'gleb', label: '📈 Фонд Глеба', sheetType: 'расход' }
 ];
 
 /* ---------- активы Глеба ---------- */
@@ -123,8 +123,8 @@ async function fetchUsdPrice(coingeckoId) {
 const fmtNum = (v, d = 8) => Number(v).toLocaleString('ru-RU', { maximumFractionDigits: d });
 function glebSummary(s) {
   const a = GLEB_ASSETS.find(x => x.key === s.glebAsset);
-  if (s.glebAsset === 'BAL') return `🔄 Баланс депозита Глеба: ${fmtNum(s.amount, 2)} ₽`;
-  let t = `📈 Глеб: ${fmtNum(s.amount, 2)} ₽ → ${a ? a.label : s.glebAsset}`;
+  if (s.glebAsset === 'BAL') return `🔄 Фонд Глеба, баланс депозита: ${fmtNum(s.amount, 2)} ₽`;
+  let t = `📈 Фонд Глеба: ${fmtNum(s.amount, 2)} ₽ → ${a ? a.label : s.glebAsset}`;
   if (s.units != null) t += `\nКуплено: ${fmtNum(s.units)} ${s.glebAsset}`;
   if (s.price != null) t += ` по $${fmtNum(s.price, 4)}`;
   if (s.note) t += `\nЗаметка: ${s.note}`;
@@ -141,7 +141,7 @@ function askGlebAsset(chatId, session, messageId) {
   session.type = TYPES.find(t => t.key === 'gleb');
   session.category = GLEB_CATEGORY;
   sessions.set(chatId, session);
-  const text = `Глеб: ${fmtNum(session.amount, 2)} ₽ — куда?`;
+  const text = `Фонд Глеба: ${fmtNum(session.amount, 2)} ₽ — куда?`;
   if (messageId) return bot.editMessageText(text, { chat_id: chatId, message_id: messageId, reply_markup: glebAssetKeyboard() });
   return bot.sendMessage(chatId, text, { reply_markup: glebAssetKeyboard() });
 }
@@ -264,7 +264,7 @@ bot.on('callback_query', async (query) => {
     const type = TYPES.find(t => t.key === key);
     sessions.set(chatId, { step: 'amount', type });
     await bot.editMessageText(key === 'gleb'
-      ? 'Глеб 📈. Введи сумму взноса в ₽ (можно с заметкой через пробел):'
+      ? '📈 Фонд Глеба. Введи сумму взноса в ₽ (можно с заметкой через пробел):'
       : `${type.label}. Теперь введи сумму (можно с заметкой через пробел):`, {
       chat_id: chatId, message_id: query.message.message_id
     });
@@ -318,7 +318,7 @@ bot.on('callback_query', async (query) => {
     session.step = 'gleb_units';
     sessions.set(chatId, session);
     await bot.editMessageText(
-      `Глеб: ${fmtNum(session.amount, 2)} ₽ → ${asset}.\nСколько монет куплено? Например: 0.0013\nМожно сразу с ценой в $: 0.0013 85000 (без цены подставлю текущую)`,
+      `Фонд Глеба: ${fmtNum(session.amount, 2)} ₽ → ${asset}.\nСколько монет куплено? Например: 0.0013\nМожно сразу с ценой в $: 0.0013 85000 (без цены подставлю текущую)`,
       { chat_id: chatId, message_id: query.message.message_id }
     );
     return;
