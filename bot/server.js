@@ -67,6 +67,16 @@ const CATEGORIES = [
 
 const WEBHOOK_PATH = `/webhook/${TOKEN}`;
 const bot = new TelegramBot(TOKEN);
+
+// Не даём процессу падать из-за ошибок Telegram (например, «query is too old»
+// после холодного старта на бесплатном Render)
+process.on('unhandledRejection', (e) => console.error('Unhandled rejection:', e && e.message));
+process.on('uncaughtException', (e) => console.error('Uncaught exception:', e && e.message));
+const _answerCb = bot.answerCallbackQuery.bind(bot);
+bot.answerCallbackQuery = (...args) => _answerCb(...args).catch((e) => {
+  console.error('answerCallbackQuery:', e.message);
+});
+
 const app = express();
 app.use(express.json());
 
@@ -427,18 +437,29 @@ bot.on('callback_query', async (query) => {
 });
 
 app.post(WEBHOOK_PATH, (req, res) => {
-  bot.processUpdate(req.body);
-  res.sendStatus(200);
+  res.sendStatus(200); // отвечаем Telegram сразу, обработка идёт дальше
+  try {
+    bot.processUpdate(req.body);
+  } catch (e) {
+    console.error('processUpdate:', e.message);
+  }
 });
 
 app.get('/', (req, res) => res.send('grossbuh-bot is running'));
+app.get('/health', (req, res) => res.send('ok')); // для внешнего пинга (UptimeRobot)
 
 app.listen(PORT, async () => {
   console.log(`Listening on ${PORT}`);
   if (PUBLIC_URL) {
     try {
-      await bot.setWebHook(`${PUBLIC_URL}${WEBHOOK_PATH}`);
-      console.log('Webhook set to', `${PUBLIC_URL}${WEBHOOK_PATH}`);
+      const url = `${PUBLIC_URL}${WEBHOOK_PATH}`;
+      const info = await bot.getWebHookInfo();
+      if (info.url !== url) {
+        await bot.setWebHook(url);
+        console.log('Webhook set to', url);
+      } else {
+        console.log('Webhook already set');
+      }
     } catch (e) {
       console.error('Failed to set webhook:', e.message);
     }
